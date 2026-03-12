@@ -17,19 +17,23 @@ const consentFileInput = document.getElementById('consentFileInput');
 
 const toggleAllLabelsBtn = document.getElementById('toggleAllLabelsBtn');
 const filterAllBtn = document.getElementById('filterAllBtn');
+const filterCrewConfirmedBtn = document.getElementById('filterCrewConfirmedBtn');
+const filterCrewPendingBtn = document.getElementById('filterCrewPendingBtn');
+const filterNoConsentBtn = document.getElementById('filterNoConsentBtn');
 const filterFujairahBtn = document.getElementById('filterFujairahBtn');
 const filterYanbuBtn = document.getElementById('filterYanbuBtn');
-const filterNoConsentBtn = document.getElementById('filterNoConsentBtn');
-const filterCrewBtn = document.getElementById('filterCrewBtn');
+const filterBothBtn = document.getElementById('filterBothBtn');
 
 const shipSearchInput = document.getElementById('shipSearchInput');
 const shipSearchDropdown = document.getElementById('shipSearchDropdown');
 
 const countAll = document.getElementById('countAll');
+const countCrewConfirmed = document.getElementById('countCrewConfirmed');
+const countCrewPending = document.getElementById('countCrewPending');
 const countNoConsent = document.getElementById('countNoConsent');
-const countCrew = document.getElementById('countCrew');
 const countFujairah = document.getElementById('countFujairah');
 const countYanbu = document.getElementById('countYanbu');
+const countBoth = document.getElementById('countBoth');
 
 let vessels = [];
 let markers = [];
@@ -73,19 +77,39 @@ function normalizeConsent(value) {
   return String(value || '').trim();
 }
 
-function hasCrewPlan(vessel) {
-  return Boolean(
-    (vessel.crewCount && String(vessel.crewCount).trim() !== '') ||
-    (vessel.crewPort && String(vessel.crewPort).trim() !== '') ||
-    (vessel.crewPlanDetail && String(vessel.crewPlanDetail).trim() !== '')
-  );
+function normalizeCrewPlanStatus(value) {
+  const v = String(value || '').trim();
+  if (v === '확정' || v === '미정' || v === '불요') return v;
+  return '불요';
+}
+
+function hasText(value) {
+  return String(value ?? '').trim() !== '';
+}
+
+function makeOptionalLine(label, value, className = 'map-value-normal') {
+  if (!hasText(value)) return '';
+  return `<div class="line"><span class="label-name">${label}:</span> <span class="${className}">${escapeHtml(value)}</span></div>`;
 }
 
 function getVesselColor(vessel) {
+
+  // 동의서 미확보는 무조건 빨간색
   if (normalizeConsent(vessel.consentLetter) === '미확보') {
     return 'red';
   }
-  return hasCrewPlan(vessel) ? 'yellow' : 'green';
+
+  // 선원교대계획 기준 색상
+  if (vessel.crewPlanStatus === '확정') {
+    return 'yellow';
+  }
+
+  if (vessel.crewPlanStatus === '미정') {
+    return 'red';
+  }
+
+  // 교대 불요
+  return 'green';
 }
 
 function getShipIcon(vessel) {
@@ -114,26 +138,26 @@ function getNameIcon(name) {
 }
 
 function highlightValue(value) {
-  if (value === '동의' || value === '확보') {
+  if (value === '동의' || value === '확보' || value === '불요') {
     return `<span class="map-value-green">${escapeHtml(value)}</span>`;
   }
-  if (value === '확인중' || value === '진행중') {
+  if (value === '확인중' || value === '진행중' || value === '확정') {
     return `<span class="map-value-yellow">${escapeHtml(value)}</span>`;
   }
-  if (value === '미동의' || value === '미확보') {
+  if (value === '미동의' || value === '미확보' || value === '미정') {
     return `<span class="map-value-red">${escapeHtml(value)}</span>`;
   }
   return `<span class="map-value-normal">${escapeHtml(value || '-')}</span>`;
 }
 
 function highlightListValue(value) {
-  if (value === '동의' || value === '확보') {
+  if (value === '동의' || value === '확보' || value === '불요') {
     return `<span class="list-value-green">${escapeHtml(value)}</span>`;
   }
-  if (value === '확인중' || value === '진행중') {
+  if (value === '확인중' || value === '진행중' || value === '확정') {
     return `<span class="list-value-yellow">${escapeHtml(value)}</span>`;
   }
-  if (value === '미동의' || value === '미확보') {
+  if (value === '미동의' || value === '미확보' || value === '미정') {
     return `<span class="list-value-red">${escapeHtml(value)}</span>`;
   }
   return `<span class="list-value-normal">${escapeHtml(value || '-')}</span>`;
@@ -145,7 +169,20 @@ function formatMoney(value) {
   return `$${num.toLocaleString('en-US')}`;
 }
 
+function isBothPossible(vessel) {
+  return normalizeConsent(vessel.fujairahConsent) === '동의'
+    && normalizeConsent(vessel.yanbuConsent) === '동의';
+}
+
 function getFilteredVessels() {
+  if (currentFilter === 'crewConfirmed') {
+    return vessels.filter(v => normalizeCrewPlanStatus(v.crewPlanStatus) === '확정');
+  }
+
+  if (currentFilter === 'crewPending') {
+    return vessels.filter(v => normalizeCrewPlanStatus(v.crewPlanStatus) === '미정');
+  }
+
   if (currentFilter === 'fujairah') {
     return vessels.filter(v => normalizeConsent(v.fujairahConsent) === '동의');
   }
@@ -154,12 +191,12 @@ function getFilteredVessels() {
     return vessels.filter(v => normalizeConsent(v.yanbuConsent) === '동의');
   }
 
-  if (currentFilter === 'noConsent') {
-    return vessels.filter(v => normalizeConsent(v.consentLetter) === '미확보');
+  if (currentFilter === 'both') {
+    return vessels.filter(v => isBothPossible(v));
   }
 
-  if (currentFilter === 'crew') {
-    return vessels.filter(v => hasCrewPlan(v));
+  if (currentFilter === 'noConsent') {
+    return vessels.filter(v => normalizeConsent(v.consentLetter) === '미확보');
   }
 
   return vessels;
@@ -179,27 +216,39 @@ function makeConsentButtons(index, vessel) {
 }
 
 function makeBonusBlock(vessel) {
-  const hasBonusCount = vessel.bonusCount !== undefined && vessel.bonusCount !== null && String(vessel.bonusCount).trim() !== '';
-  const hasBonusAmount = vessel.bonusAmount !== undefined && vessel.bonusAmount !== null && String(vessel.bonusAmount).trim() !== '';
+  const lines = [];
+
+  if (hasText(vessel.bonusCount)) {
+    lines.push(`<div class="line"><span class="label-name">보너스횟수:</span> <span class="map-value-normal">${escapeHtml(vessel.bonusCount)}회</span></div>`);
+  }
+
+  if (hasText(vessel.bonusAmount)) {
+    lines.push(`<div class="line"><span class="label-name">보너스총액:</span> <span class="map-value-normal">${escapeHtml(formatMoney(vessel.bonusAmount))}</span></div>`);
+  }
+
+  return lines.join('');
+}
+
+function makeCrewPlanBlock(vessel) {
+  const crewPlanStatus = normalizeCrewPlanStatus(vessel.crewPlanStatus);
+
+  if (crewPlanStatus === '불요') {
+    return `
+      <div class="line"><span class="label-name">선원교대계획:</span> ${highlightValue(crewPlanStatus)}</div>
+    `;
+  }
 
   return `
-    <div class="line"><span class="label-name">보너스횟수:</span> <span class="map-value-normal">${hasBonusCount ? escapeHtml(vessel.bonusCount) + '회' : '-'}</span></div>
-    <div class="line"><span class="label-name">보너스총액:</span> <span class="map-value-normal">${hasBonusAmount ? escapeHtml(formatMoney(vessel.bonusAmount)) : '-'}</span></div>
+    <div class="line"><span class="label-name">선원교대계획:</span> ${highlightValue(crewPlanStatus)}</div>
+    ${makeOptionalLine('선원교대 인원', hasText(vessel.crewCount) ? `${vessel.crewCount}명` : '')}
+    ${makeOptionalLine('교대날짜', vessel.crewDate)}
+    ${makeOptionalLine('선원교대 항구', vessel.crewPort)}
+    ${makeOptionalLine('선원교대 상세', vessel.crewPlanDetail)}
   `;
 }
 
 function makeLabelHtml(vessel, index) {
   const cls = getVesselColor(vessel);
-
-  const crewBlock = hasCrewPlan(vessel)
-    ? `
-      <div class="line"><span class="label-name">교대:</span> <span class="map-value-normal">${escapeHtml(vessel.crewCount || '-')}명</span></div>
-      <div class="line"><span class="label-name">장소:</span> <span class="map-value-normal">${escapeHtml(vessel.crewPort || '-')}</span></div>
-      <div class="line"><span class="label-name">계획:</span> <span class="map-value-normal">${escapeHtml(vessel.crewPlanDetail || '-')}</span></div>
-    `
-    : `
-      <div class="line"><span class="label-name">교대계획:</span> <span class="map-value-green">없음</span></div>
-    `;
 
   return `
     <div class="map-label ${cls}" data-index="${index}">
@@ -207,7 +256,7 @@ function makeLabelHtml(vessel, index) {
       <div class="line"><span class="label-name">푸자이라:</span> ${highlightValue(vessel.fujairahConsent)}</div>
       <div class="line"><span class="label-name">얀부:</span> ${highlightValue(vessel.yanbuConsent)}</div>
       <div class="line"><span class="label-name">동의서:</span> ${highlightValue(vessel.consentLetter)}</div>
-      ${crewBlock}
+      ${makeCrewPlanBlock(vessel)}
       ${makeBonusBlock(vessel)}
       <div class="map-label-actions">
         <button type="button" class="map-mini-btn edit" onclick="editVessel(${index})">수정</button>
@@ -220,10 +269,12 @@ function makeLabelHtml(vessel, index) {
 function updateToolbarButtons() {
   const buttonMap = {
     all: filterAllBtn,
-    crew: filterCrewBtn,
+    crewConfirmed: filterCrewConfirmedBtn,
+    crewPending: filterCrewPendingBtn,
     noConsent: filterNoConsentBtn,
     fujairah: filterFujairahBtn,
-    yanbu: filterYanbuBtn
+    yanbu: filterYanbuBtn,
+    both: filterBothBtn
   };
 
   Object.values(buttonMap).forEach(btn => {
@@ -240,8 +291,12 @@ function updateStatusBoard() {
     countAll.textContent = `${vessels.length}척`;
   }
 
-  if (countCrew) {
-    countCrew.textContent = `${vessels.filter(v => hasCrewPlan(v)).length}척`;
+  if (countCrewConfirmed) {
+    countCrewConfirmed.textContent = `${vessels.filter(v => normalizeCrewPlanStatus(v.crewPlanStatus) === '확정').length}척`;
+  }
+
+  if (countCrewPending) {
+    countCrewPending.textContent = `${vessels.filter(v => normalizeCrewPlanStatus(v.crewPlanStatus) === '미정').length}척`;
   }
 
   if (countNoConsent) {
@@ -256,6 +311,10 @@ function updateStatusBoard() {
     countYanbu.textContent = `${vessels.filter(v => normalizeConsent(v.yanbuConsent) === '동의').length}척`;
   }
 
+  if (countBoth) {
+    countBoth.textContent = `${vessels.filter(v => isBothPossible(v)).length}척`;
+  }
+
   updateToolbarButtons();
 }
 
@@ -267,6 +326,12 @@ async function loadData() {
     if (!Array.isArray(vessels)) {
       vessels = [];
     }
+
+    vessels = vessels.map(v => ({
+      ...v,
+      crewPlanStatus: normalizeCrewPlanStatus(v.crewPlanStatus),
+      crewDate: v.crewDate || ''
+    }));
 
     updateStatusBoard();
     renderList();
@@ -560,7 +625,7 @@ function renderExternalLabels() {
   rightItems.sort((a, b) => a.point.y - b.point.y);
 
   const boxW = 250;
-  const boxH = 220;
+  const boxH = 250;
   const gap = 18;
 
   const topY = 16;
@@ -634,11 +699,13 @@ function renderList() {
       <small>푸자이라항: ${highlightListValue(vessel.fujairahConsent)}</small>
       <small>얀부항: ${highlightListValue(vessel.yanbuConsent)}</small>
       <small>동의서: ${highlightListValue(vessel.consentLetter)}</small>
-      <small>선원교대 인원: ${escapeHtml(vessel.crewCount || '-')}</small>
-      <small>선원교대 항구: ${escapeHtml(vessel.crewPort || '-')}</small>
-      <small>선원교대 계획: ${escapeHtml(vessel.crewPlanDetail || '-')}</small>
-      <small>보너스 횟수: ${escapeHtml(vessel.bonusCount || '-')}</small>
-      <small>보너스 총액: ${vessel.bonusAmount ? escapeHtml(formatMoney(vessel.bonusAmount)) : '-'}</small>
+      <small>선원교대계획: ${highlightListValue(normalizeCrewPlanStatus(vessel.crewPlanStatus))}</small>
+      ${hasText(vessel.crewCount) ? `<small>선원교대 인원: ${escapeHtml(vessel.crewCount)}명</small>` : ''}
+      ${hasText(vessel.crewDate) ? `<small>교대날짜: ${escapeHtml(vessel.crewDate)}</small>` : ''}
+      ${hasText(vessel.crewPort) ? `<small>선원교대 항구: ${escapeHtml(vessel.crewPort)}</small>` : ''}
+      ${hasText(vessel.crewPlanDetail) ? `<small>선원교대 상세: ${escapeHtml(vessel.crewPlanDetail)}</small>` : ''}
+      ${hasText(vessel.bonusCount) ? `<small>보너스 횟수: ${escapeHtml(vessel.bonusCount)}회</small>` : ''}
+      ${hasText(vessel.bonusAmount) ? `<small>보너스 총액: ${escapeHtml(formatMoney(vessel.bonusAmount))}</small>` : ''}
       <small>표시색: ${status}</small>
       <div class="actions">
         <button onclick="editVessel(${index})">수정</button>
@@ -653,6 +720,7 @@ function renderList() {
 
 function resetForm() {
   form.reset();
+  document.getElementById('crewPlanStatus').value = '불요';
   editIndex = null;
 }
 
@@ -731,10 +799,12 @@ toggleAllLabelsBtn.addEventListener('click', () => {
 });
 
 filterAllBtn.addEventListener('click', () => setFilter('all'));
-filterCrewBtn.addEventListener('click', () => setFilter('crew'));
+filterCrewConfirmedBtn.addEventListener('click', () => setFilter('crewConfirmed'));
+filterCrewPendingBtn.addEventListener('click', () => setFilter('crewPending'));
 filterNoConsentBtn.addEventListener('click', () => setFilter('noConsent'));
 filterFujairahBtn.addEventListener('click', () => setFilter('fujairah'));
 filterYanbuBtn.addEventListener('click', () => setFilter('yanbu'));
+filterBothBtn.addEventListener('click', () => setFilter('both'));
 
 shipSearchInput.addEventListener('input', (e) => {
   renderSearchSuggestions(e.target.value);
@@ -780,7 +850,9 @@ form.addEventListener('submit', async function (e) {
     fujairahConsent: document.getElementById('fujairahConsent').value,
     yanbuConsent: document.getElementById('yanbuConsent').value,
     consentLetter: document.getElementById('consentLetter').value,
+    crewPlanStatus: document.getElementById('crewPlanStatus').value,
     crewCount: document.getElementById('crewCount').value.trim(),
+    crewDate: document.getElementById('crewDate').value.trim(),
     crewPort: document.getElementById('crewPort').value.trim(),
     crewPlanDetail: document.getElementById('crewPlanDetail').value.trim(),
     bonusCount: document.getElementById('bonusCount').value.trim(),
@@ -817,7 +889,9 @@ window.editVessel = function (index) {
   document.getElementById('fujairahConsent').value = vessel.fujairahConsent || '동의';
   document.getElementById('yanbuConsent').value = vessel.yanbuConsent || '동의';
   document.getElementById('consentLetter').value = vessel.consentLetter || '확보';
+  document.getElementById('crewPlanStatus').value = normalizeCrewPlanStatus(vessel.crewPlanStatus);
   document.getElementById('crewCount').value = vessel.crewCount || '';
+  document.getElementById('crewDate').value = vessel.crewDate || '';
   document.getElementById('crewPort').value = vessel.crewPort || '';
   document.getElementById('crewPlanDetail').value = vessel.crewPlanDetail || '';
   document.getElementById('bonusCount').value = vessel.bonusCount || '';

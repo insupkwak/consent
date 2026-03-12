@@ -9,7 +9,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-# 운영 데이터 저장 경로
+# 써버환경
 DATA_DIR = "/home/opc/data/consent"
 DATA_FILE = os.path.join(DATA_DIR, "vessels.json")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads", "consent_letters")
@@ -19,7 +19,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
 
 
-
+# PC 환경
 # DATA_FILE = os.path.join(BASE_DIR, "vessels.json")
 # UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "consent_letters")
 
