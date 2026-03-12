@@ -444,9 +444,11 @@ function renderMap(fitBounds = false) {
       icon: getShipIcon(vessel)
     }).addTo(map);
 
-    marker.on('click', () => {
-      handleShipClick(globalIndex);
-    });
+marker.on('click', () => {
+  fillFormByVessel(globalIndex);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  handleShipClick(globalIndex);
+});
 
     markers.push(marker);
     visibleMarkers.push(marker);
@@ -882,8 +884,10 @@ form.addEventListener('submit', async function (e) {
 
 resetBtn.addEventListener('click', resetForm);
 
-window.editVessel = function (index) {
+
+function fillFormByVessel(index) {
   const vessel = vessels[index];
+  if (!vessel) return;
 
   document.getElementById('vesselName').value = vessel.name || '';
   document.getElementById('fujairahConsent').value = vessel.fujairahConsent || '동의';
@@ -896,16 +900,22 @@ window.editVessel = function (index) {
   document.getElementById('crewPlanDetail').value = vessel.crewPlanDetail || '';
   document.getElementById('bonusCount').value = vessel.bonusCount || '';
   document.getElementById('bonusAmount').value = vessel.bonusAmount || '';
-  document.getElementById('latitude').value = vessel.latitude;
-  document.getElementById('longitude').value = vessel.longitude;
+  document.getElementById('latitude').value = vessel.latitude ?? '';
+  document.getElementById('longitude').value = vessel.longitude ?? '';
 
   editIndex = index;
+}
+
+
+window.editVessel = function (index) {
+  fillFormByVessel(index);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   labelMode = 'one';
   activeLabelIndex = index;
   renderExternalLabels();
 };
+
 
 window.deleteVessel = async function (index) {
   if (!confirm('이 선박 정보를 삭제하시겠습니까?')) return;
