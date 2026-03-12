@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>선박 위치 및 동의 현황 관리</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <h1>선박 위치 및 동의 현황</h1>
+      <p>
+        선박을 클릭하면 해당 선박 안내창만 표시됩니다.
+        전체보기에서는 현재 화면에 보이는 선박만 안내창이 표시됩니다.
+      </p>
+
+      <div class="card">
+        <h2>선박 정보 입력</h2>
+        <form id="vesselForm">
+          <label for="vesselName">선박명</label>
+          <input type="text" id="vesselName" placeholder="예: RIO DE JANEIRO ENERGY" required />
+
+          <label for="fujairahConsent">푸자이라항 동의 여부</label>
+          <select id="fujairahConsent">
+            <option value="동의">동의</option>
+            <option value="미동의">미동의</option>
+            <option value="확인중">확인중</option>
+          </select>
+
+          <label for="yanbuConsent">얀부항 동의 여부</label>
+          <select id="yanbuConsent">
+            <option value="동의">동의</option>
+            <option value="미동의">미동의</option>
+            <option value="확인중">확인중</option>
+          </select>
+
+          <label for="consentLetter">동의서 확보 상태</label>
+          <select id="consentLetter">
+            <option value="확보">확보</option>
+            <option value="미확보">미확보</option>
+            <option value="진행중">진행중</option>
+          </select>
+
+          <label for="crewCount">선원교대 인원</label>
+          <input type="number" id="crewCount" min="0" placeholder="예: 5" />
+
+          <label for="crewPort">선원교대 항구</label>
+          <input type="text" id="crewPort" placeholder="예: 싱가폴, 두바이, 수에즈" />
+
+          <label for="crewPlanDetail">선원교대 계획</label>
+          <input type="text" id="crewPlanDetail" placeholder="예: 3월 15일 교대 예정, 검토중" />
+
+          <label for="bonusCount">보너스 횟수</label>
+          <input type="number" id="bonusCount" min="0" placeholder="예: 2" />
+
+          <label for="bonusAmount">보너스 총액 ($)</label>
+          <input type="number" id="bonusAmount" min="0" step="any" placeholder="예: 15000" />
+
+          <label for="latitude">위도</label>
+          <input type="number" id="latitude" step="any" placeholder="예: 25.1122" required />
+
+          <label for="longitude">경도</label>
+          <input type="number" id="longitude" step="any" placeholder="예: 56.3361" required />
+
+          <button type="submit">선박 추가 / 저장</button>
+          <button type="button" class="btn-secondary" id="resetBtn">입력 초기화</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>등록된 선박</h2>
+        <div id="vesselList" class="vessel-list"></div>
+      </div>
+    </aside>
+
+    <main class="map-wrap" id="mapWrap">
+      <div class="map-toolbar">
+        <button type="button" id="toggleAllLabelsBtn" class="map-toolbar-btn">전체보기</button>
+        <button type="button" id="filterAllBtn" class="map-toolbar-btn">전체선박</button>
+        <button type="button" id="filterFujairahBtn" class="map-toolbar-btn">푸자이라기항가능</button>
+        <button type="button" id="filterYanbuBtn" class="map-toolbar-btn">얀부기항가능</button>
+        <button type="button" id="filterNoConsentBtn" class="map-toolbar-btn">동의서 미확보</button>
+        <button type="button" id="filterCrewBtn" class="map-toolbar-btn">선원교대필요</button>
+      </div>
+
+      <div id="map"></div>
+      <div id="labelLayer" class="label-layer"></div>
+    </main>
+  </div>
+
+  <input type="file" id="consentFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp" hidden />
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
