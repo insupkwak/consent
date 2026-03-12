@@ -3,9 +3,11 @@ import json
 import os
 from werkzeug.utils import secure_filename
 
+
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 # 운영 데이터 저장 경로
 DATA_DIR = "/home/opc/data/consent"
@@ -17,10 +19,21 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
 
 
-def load_vessels():
+
+# DATA_FILE = os.path.join(BASE_DIR, "vessels.json")
+# UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "consent_letters")
+
+# os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
+
+
+
+
+def load_vessels(): 
     if not os.path.exists(DATA_FILE):
         return []
-    try:
+    try:  
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
@@ -28,7 +41,6 @@ def load_vessels():
 
 
 def save_vessels(vessels):
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(vessels, f, ensure_ascii=False, indent=2)
 
@@ -44,9 +56,6 @@ def safe_vessel_filename(vessel_name, ext):
 
 def find_existing_file(vessel_name):
     safe_name = secure_filename(vessel_name.strip()) or "vessel"
-    if not os.path.exists(UPLOAD_DIR):
-        return None
-
     for filename in os.listdir(UPLOAD_DIR):
         base, ext = os.path.splitext(filename)
         if base == safe_name:
@@ -118,4 +127,4 @@ def uploaded_consent_file(filename):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=True)

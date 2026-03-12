@@ -22,13 +22,22 @@ const filterYanbuBtn = document.getElementById('filterYanbuBtn');
 const filterNoConsentBtn = document.getElementById('filterNoConsentBtn');
 const filterCrewBtn = document.getElementById('filterCrewBtn');
 
+const shipSearchInput = document.getElementById('shipSearchInput');
+const shipSearchDropdown = document.getElementById('shipSearchDropdown');
+
+const countAll = document.getElementById('countAll');
+const countNoConsent = document.getElementById('countNoConsent');
+const countCrew = document.getElementById('countCrew');
+const countFujairah = document.getElementById('countFujairah');
+const countYanbu = document.getElementById('countYanbu');
+
 let vessels = [];
 let markers = [];
 let nameMarkers = [];
 let editIndex = null;
 let labelObjects = [];
 
-let labelMode = 'none'; // all | one | none
+let labelMode = 'none';
 let activeLabelIndex = null;
 let currentFilter = 'all';
 let uploadTargetIndex = null;
@@ -67,18 +76,25 @@ function normalizeConsent(value) {
 function hasCrewPlan(vessel) {
   return Boolean(
     (vessel.crewCount && String(vessel.crewCount).trim() !== '') ||
-    (vessel.crewPort && vessel.crewPort.trim() !== '') ||
-    (vessel.crewPlanDetail && vessel.crewPlanDetail.trim() !== '')
+    (vessel.crewPort && String(vessel.crewPort).trim() !== '') ||
+    (vessel.crewPlanDetail && String(vessel.crewPlanDetail).trim() !== '')
   );
 }
 
 function getVesselColor(vessel) {
+  if (normalizeConsent(vessel.consentLetter) === '미확보') {
+    return 'red';
+  }
   return hasCrewPlan(vessel) ? 'yellow' : 'green';
 }
 
 function getShipIcon(vessel) {
   const type = getVesselColor(vessel);
-  const fill = type === 'yellow' ? '#eab308' : '#22c55e';
+  const fill = type === 'red'
+    ? '#ef4444'
+    : type === 'yellow'
+      ? '#eab308'
+      : '#22c55e';
 
   return L.divIcon({
     className: 'ship-icon-wrap',
@@ -201,6 +217,48 @@ function makeLabelHtml(vessel, index) {
   `;
 }
 
+function updateToolbarButtons() {
+  const buttonMap = {
+    all: filterAllBtn,
+    crew: filterCrewBtn,
+    noConsent: filterNoConsentBtn,
+    fujairah: filterFujairahBtn,
+    yanbu: filterYanbuBtn
+  };
+
+  Object.values(buttonMap).forEach(btn => {
+    if (btn) btn.classList.remove('active');
+  });
+
+  if (buttonMap[currentFilter]) {
+    buttonMap[currentFilter].classList.add('active');
+  }
+}
+
+function updateStatusBoard() {
+  if (countAll) {
+    countAll.textContent = `${vessels.length}척`;
+  }
+
+  if (countCrew) {
+    countCrew.textContent = `${vessels.filter(v => hasCrewPlan(v)).length}척`;
+  }
+
+  if (countNoConsent) {
+    countNoConsent.textContent = `${vessels.filter(v => normalizeConsent(v.consentLetter) === '미확보').length}척`;
+  }
+
+  if (countFujairah) {
+    countFujairah.textContent = `${vessels.filter(v => normalizeConsent(v.fujairahConsent) === '동의').length}척`;
+  }
+
+  if (countYanbu) {
+    countYanbu.textContent = `${vessels.filter(v => normalizeConsent(v.yanbuConsent) === '동의').length}척`;
+  }
+
+  updateToolbarButtons();
+}
+
 async function loadData() {
   try {
     const response = await fetch('/api/vessels');
@@ -210,13 +268,17 @@ async function loadData() {
       vessels = [];
     }
 
+    updateStatusBoard();
     renderList();
     renderMap(true);
+    renderSearchSuggestions('');
   } catch (error) {
     console.error('데이터 불러오기 실패:', error);
     vessels = [];
+    updateStatusBoard();
     renderList();
     renderMap(true);
+    renderSearchSuggestions('');
   }
 }
 
@@ -260,8 +322,10 @@ async function uploadConsentFile(index, file) {
 
     vessel.consentFile = result.filename || '';
     alert('동의서가 업로드되었습니다. 기존 파일은 덮어쓰기 되었습니다.');
+    updateStatusBoard();
     renderList();
-    renderExternalLabels();
+    renderMap(false);
+    renderSearchSuggestions(shipSearchInput.value.trim());
   } catch (error) {
     console.error(error);
     alert('동의서 업로드 중 오류가 발생했습니다.');
@@ -559,7 +623,8 @@ function renderList() {
 
   filtered.forEach((vessel) => {
     const index = vessels.findIndex(v => v === vessel);
-    const status = getVesselColor(vessel) === 'yellow' ? '노란색' : '녹색';
+    const colorType = getVesselColor(vessel);
+    const status = colorType === 'red' ? '빨간색' : colorType === 'yellow' ? '노란색' : '녹색';
     const hasConsentFile = !!vessel.consentFile;
 
     const item = document.createElement('div');
@@ -578,7 +643,6 @@ function renderList() {
       <div class="actions">
         <button onclick="editVessel(${index})">수정</button>
         <button class="delete-btn" onclick="deleteVessel(${index})">삭제</button>
-        <button onclick="focusVessel(${index})">지도 보기</button>
         <button class="view-btn" onclick="viewConsentFile(${index})" ${hasConsentFile ? '' : 'disabled'}>동의서</button>
         <button class="upload-btn" onclick="openConsentUpload(${index})">업로드</button>
       </div>
@@ -596,8 +660,64 @@ function setFilter(filterName) {
   currentFilter = filterName;
   labelMode = 'none';
   activeLabelIndex = null;
+  updateToolbarButtons();
   renderList();
   renderMap(true);
+}
+
+function focusVesselFromSearch(index) {
+  const vessel = vessels[index];
+  if (!vessel) return;
+
+  currentFilter = 'all';
+  updateToolbarButtons();
+  renderList();
+  renderMap(false);
+
+  map.setView([vessel.latitude, vessel.longitude], 5.5);
+  labelMode = 'one';
+  activeLabelIndex = index;
+
+  setTimeout(() => {
+    renderExternalLabels();
+    updateLeaderLines();
+  }, 150);
+}
+
+function renderSearchSuggestions(keyword) {
+  const q = String(keyword || '').trim().toLowerCase();
+  shipSearchDropdown.innerHTML = '';
+
+  if (!q) {
+    shipSearchDropdown.classList.remove('show');
+    return;
+  }
+
+  const matched = vessels.filter(v => String(v.name || '').toLowerCase().includes(q)).slice(0, 20);
+
+  if (!matched.length) {
+    const empty = document.createElement('div');
+    empty.className = 'search-item';
+    empty.textContent = '검색 결과 없음';
+    shipSearchDropdown.appendChild(empty);
+    shipSearchDropdown.classList.add('show');
+    return;
+  }
+
+  matched.forEach(vessel => {
+    const index = vessels.findIndex(v => v === vessel);
+    const item = document.createElement('div');
+    item.className = 'search-item';
+    item.textContent = vessel.name;
+    item.addEventListener('click', () => {
+      shipSearchInput.value = vessel.name;
+      shipSearchDropdown.classList.remove('show');
+      focusVesselFromSearch(index);
+    });
+    shipSearchDropdown.appendChild(item);
+  });
+
+  shipSearchDropdown.classList.add('show');
 }
 
 toggleAllLabelsBtn.addEventListener('click', () => {
@@ -611,10 +731,35 @@ toggleAllLabelsBtn.addEventListener('click', () => {
 });
 
 filterAllBtn.addEventListener('click', () => setFilter('all'));
+filterCrewBtn.addEventListener('click', () => setFilter('crew'));
+filterNoConsentBtn.addEventListener('click', () => setFilter('noConsent'));
 filterFujairahBtn.addEventListener('click', () => setFilter('fujairah'));
 filterYanbuBtn.addEventListener('click', () => setFilter('yanbu'));
-filterNoConsentBtn.addEventListener('click', () => setFilter('noConsent'));
-filterCrewBtn.addEventListener('click', () => setFilter('crew'));
+
+shipSearchInput.addEventListener('input', (e) => {
+  renderSearchSuggestions(e.target.value);
+});
+
+shipSearchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+
+    const keyword = shipSearchInput.value.trim().toLowerCase();
+    if (!keyword) return;
+
+    const foundIndex = vessels.findIndex(v => String(v.name || '').toLowerCase().includes(keyword));
+    if (foundIndex >= 0) {
+      shipSearchDropdown.classList.remove('show');
+      focusVesselFromSearch(foundIndex);
+    }
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!shipSearchInput.contains(e.target) && !shipSearchDropdown.contains(e.target)) {
+    shipSearchDropdown.classList.remove('show');
+  }
+});
 
 consentFileInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
@@ -656,8 +801,10 @@ form.addEventListener('submit', async function (e) {
   }
 
   await saveData();
+  updateStatusBoard();
   renderList();
   renderMap(false);
+  renderSearchSuggestions(shipSearchInput.value.trim());
   resetForm();
 });
 
@@ -699,20 +846,14 @@ window.deleteVessel = async function (index) {
   }
 
   await saveData();
+  updateStatusBoard();
   renderList();
   renderMap(false);
+  renderSearchSuggestions(shipSearchInput.value.trim());
 
   if (editIndex === index) {
     resetForm();
   }
-};
-
-window.focusVessel = function (index) {
-  const vessel = vessels[index];
-  map.setView([vessel.latitude, vessel.longitude], map.getZoom());
-  labelMode = 'one';
-  activeLabelIndex = index;
-  setTimeout(renderExternalLabels, 100);
 };
 
 window.openConsentUpload = function (index) {

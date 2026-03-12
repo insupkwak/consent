@@ -10,8 +10,9 @@
 </head>
 <body>
   <div class="container">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <h1>선박 위치 및 동의 현황</h1>
+
       <p>
         선박을 클릭하면 해당 선박 안내창만 표시됩니다.
         전체보기에서는 현재 화면에 보이는 선박만 안내창이 표시됩니다.
@@ -78,12 +79,40 @@
 
     <main class="map-wrap" id="mapWrap">
       <div class="map-toolbar">
-        <button type="button" id="toggleAllLabelsBtn" class="map-toolbar-btn">전체보기</button>
-        <button type="button" id="filterAllBtn" class="map-toolbar-btn">전체선박</button>
-        <button type="button" id="filterFujairahBtn" class="map-toolbar-btn">푸자이라기항가능</button>
-        <button type="button" id="filterYanbuBtn" class="map-toolbar-btn">얀부기항가능</button>
-        <button type="button" id="filterNoConsentBtn" class="map-toolbar-btn">동의서 미확보</button>
-        <button type="button" id="filterCrewBtn" class="map-toolbar-btn">선원교대필요</button>
+        <div class="search-box">
+          <input type="text" id="shipSearchInput" placeholder="선박검색" autocomplete="off" />
+          <div id="shipSearchDropdown" class="search-dropdown"></div>
+        </div>
+
+        <button type="button" id="toggleAllLabelsBtn" class="toolbar-chip toolbar-chip-btn">
+          <span class="toolbar-chip-label">전체보기</span>
+          <span class="toolbar-chip-value">ON/OFF</span>
+        </button>
+
+        <button type="button" id="filterAllBtn" class="toolbar-chip toolbar-chip-btn active">
+          <span class="toolbar-chip-label">전체선박</span>
+          <span class="toolbar-chip-value" id="countAll">0척</span>
+        </button>
+
+        <button type="button" id="filterCrewBtn" class="toolbar-chip toolbar-chip-btn">
+          <span class="toolbar-chip-label">선원교대</span>
+          <span class="toolbar-chip-value" id="countCrew">0척</span>
+        </button>
+
+        <button type="button" id="filterNoConsentBtn" class="toolbar-chip toolbar-chip-btn">
+          <span class="toolbar-chip-label">동의서 미확보</span>
+          <span class="toolbar-chip-value" id="countNoConsent">0척</span>
+        </button>
+
+        <button type="button" id="filterFujairahBtn" class="toolbar-chip toolbar-chip-btn">
+          <span class="toolbar-chip-label">푸자이라 가능</span>
+          <span class="toolbar-chip-value" id="countFujairah">0척</span>
+        </button>
+
+        <button type="button" id="filterYanbuBtn" class="toolbar-chip toolbar-chip-btn">
+          <span class="toolbar-chip-label">얀부 가능</span>
+          <span class="toolbar-chip-value" id="countYanbu">0척</span>
+        </button>
       </div>
 
       <div id="map"></div>
