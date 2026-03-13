@@ -230,14 +230,14 @@ function makeCrewPlanBlock(vessel) {
 
   if (crewPlanStatus === '불요') {
     return `
-      <div class="line"><span class="label-name">선원교대계획:</span> ${highlightValue(crewPlanStatus)}</div>
+      <div class="line"><span class="label-name">선원교대 계획:</span> ${highlightValue(crewPlanStatus)}</div>
     `;
   }
 
   return `
-    <div class="line"><span class="label-name">선원교대계획:</span> ${highlightValue(crewPlanStatus)}</div>
+    <div class="line"><span class="label-name">선원교대 계획:</span> ${highlightValue(crewPlanStatus)}</div>
     ${makeOptionalLine('선원교대 인원', hasText(vessel.crewCount) ? `${vessel.crewCount}명` : '')}
-    ${makeOptionalLine('교대날짜', vessel.crewDate)}
+    ${makeOptionalLine('선원교대 날짜', vessel.crewDate)}
     ${makeOptionalLine('선원교대 항구', vessel.crewPort)}
     ${makeOptionalLine('선원교대 상세', vessel.crewPlanDetail)}
   `;
@@ -252,6 +252,7 @@ function makeLabelHtml(vessel, index) {
       <div class="line"><span class="label-name">푸자이라:</span> ${highlightValue(vessel.fujairahConsent)}</div>
       <div class="line"><span class="label-name">얀부:</span> ${highlightValue(vessel.yanbuConsent)}</div>
       <div class="line"><span class="label-name">동의서:</span> ${highlightValue(vessel.consentLetter)}</div>
+      ${makeOptionalLine('항차계획', vessel.voyagePlan)}
       ${makeCrewPlanBlock(vessel)}
       ${makeBonusBlock(vessel)}
       <div class="map-label-actions">
@@ -329,7 +330,8 @@ async function loadData() {
     vessels = vessels.map(v => ({
       ...v,
       crewPlanStatus: normalizeCrewPlanStatus(v.crewPlanStatus),
-      crewDate: v.crewDate || ''
+      crewDate: v.crewDate || '',
+      voyagePlan: v.voyagePlan || ''
     }));
 
     updateStatusBoard();
@@ -721,9 +723,10 @@ function renderList() {
       <small>푸자이라항: ${highlightListValue(vessel.fujairahConsent)}</small>
       <small>얀부항: ${highlightListValue(vessel.yanbuConsent)}</small>
       <small>동의서: ${highlightListValue(vessel.consentLetter)}</small>
-      <small>선원교대계획: ${highlightListValue(normalizeCrewPlanStatus(vessel.crewPlanStatus))}</small>
+      ${hasText(vessel.voyagePlan) ? `<small>항차계획: ${escapeHtml(vessel.voyagePlan)}</small>` : ''}
+      <small>선원교대 계획: ${highlightListValue(normalizeCrewPlanStatus(vessel.crewPlanStatus))}</small>
       ${hasText(vessel.crewCount) ? `<small>선원교대 인원: ${escapeHtml(vessel.crewCount)}명</small>` : ''}
-      ${hasText(vessel.crewDate) ? `<small>교대날짜: ${escapeHtml(vessel.crewDate)}</small>` : ''}
+      ${hasText(vessel.crewDate) ? `<small>선원교대 날짜: ${escapeHtml(vessel.crewDate)}</small>` : ''}
       ${hasText(vessel.crewPort) ? `<small>선원교대 항구: ${escapeHtml(vessel.crewPort)}</small>` : ''}
       ${hasText(vessel.crewPlanDetail) ? `<small>선원교대 상세: ${escapeHtml(vessel.crewPlanDetail)}</small>` : ''}
       ${hasText(vessel.bonusCount) ? `<small>보너스 횟수: ${escapeHtml(vessel.bonusCount)}회</small>` : ''}
@@ -873,6 +876,7 @@ form.addEventListener('submit', async function (e) {
     fujairahConsent: document.getElementById('fujairahConsent').value,
     yanbuConsent: document.getElementById('yanbuConsent').value,
     consentLetter: document.getElementById('consentLetter').value,
+    voyagePlan: document.getElementById('voyagePlan').value.trim(),
     crewPlanStatus: document.getElementById('crewPlanStatus').value,
     crewCount: document.getElementById('crewCount').value.trim(),
     crewDate: document.getElementById('crewDate').value.trim(),
@@ -918,6 +922,7 @@ function fillFormByVessel(index) {
   document.getElementById('fujairahConsent').value = vessel.fujairahConsent || '동의';
   document.getElementById('yanbuConsent').value = vessel.yanbuConsent || '동의';
   document.getElementById('consentLetter').value = vessel.consentLetter || '확보';
+  document.getElementById('voyagePlan').value = vessel.voyagePlan || '';
   document.getElementById('crewPlanStatus').value = normalizeCrewPlanStatus(vessel.crewPlanStatus);
   document.getElementById('crewCount').value = vessel.crewCount || '';
   document.getElementById('crewDate').value = vessel.crewDate || '';

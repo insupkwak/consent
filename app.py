@@ -24,59 +24,50 @@ ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
 # ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
 
 
-def load_vessels():
-    if not os.path.exists(DATA_FILE):
-        return []
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except Exception:
-        return []
-
-
-def save_vessels(vessels):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(vessels, f, ensure_ascii=False, indent=2)
-
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def safe_vessel_filename(vessel_name, ext):
-    safe_name = secure_filename(vessel_name.strip()) or "vessel"
-    return f"{safe_name}.{ext.lower()}"
+def load_vessels():
+    if not os.path.exists(DATA_FILE):
+        return []
+
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            return []
+    except Exception:
+        return []
 
 
-def find_existing_file(vessel_name):
-    safe_name = secure_filename(vessel_name.strip()) or "vessel"
-    if not os.path.exists(UPLOAD_DIR):
-        return None
-
-    for filename in os.listdir(UPLOAD_DIR):
-        base, ext = os.path.splitext(filename)
-        if base == safe_name:
-            return filename
-    return None
+def save_vessels(vessels):
+    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(vessels, f, ensure_ascii=False, indent=2)
 
 
-def normalize_vessel(vessel):
+def normalize_vessel_data(data, old_vessel=None):
+    old_vessel = old_vessel or {}
+
     return {
-        "name": (vessel.get("name") or "").strip(),
-        "fujairahConsent": vessel.get("fujairahConsent", "확인중"),
-        "yanbuConsent": vessel.get("yanbuConsent", "확인중"),
-        "consentLetter": vessel.get("consentLetter", "미확보"),
-        "consentFile": vessel.get("consentFile", ""),
-        "crewPlanStatus": vessel.get("crewPlanStatus", "불요"),
-        "crewCount": vessel.get("crewCount", ""),
-        "crewDate": vessel.get("crewDate", ""),
-        "crewPort": vessel.get("crewPort", ""),
-        "crewPlanDetail": vessel.get("crewPlanDetail", ""),
-        "bonusCount": vessel.get("bonusCount", ""),
-        "bonusAmount": vessel.get("bonusAmount", ""),
-        "latitude": vessel.get("latitude", ""),
-        "longitude": vessel.get("longitude", "")
+        "name": str(data.get("name", "")).strip(),
+        "fujairahConsent": str(data.get("fujairahConsent", old_vessel.get("fujairahConsent", "동의"))).strip(),
+        "yanbuConsent": str(data.get("yanbuConsent", old_vessel.get("yanbuConsent", "동의"))).strip(),
+        "consentLetter": str(data.get("consentLetter", old_vessel.get("consentLetter", "확보"))).strip(),
+        "voyagePlan": str(data.get("voyagePlan", old_vessel.get("voyagePlan", ""))).strip(),
+        "crewPlanStatus": str(data.get("crewPlanStatus", old_vessel.get("crewPlanStatus", "불요"))).strip(),
+        "crewCount": str(data.get("crewCount", old_vessel.get("crewCount", ""))).strip(),
+        "crewDate": str(data.get("crewDate", old_vessel.get("crewDate", ""))).strip(),
+        "crewPort": str(data.get("crewPort", old_vessel.get("crewPort", ""))).strip(),
+        "crewPlanDetail": str(data.get("crewPlanDetail", old_vessel.get("crewPlanDetail", ""))).strip(),
+        "bonusCount": str(data.get("bonusCount", old_vessel.get("bonusCount", ""))).strip(),
+        "bonusAmount": str(data.get("bonusAmount", old_vessel.get("bonusAmount", ""))).strip(),
+        "latitude": data.get("latitude", old_vessel.get("latitude", "")),
+        "longitude": data.get("longitude", old_vessel.get("longitude", "")),
+        "consentFile": old_vessel.get("consentFile", "")
     }
 
 
@@ -87,156 +78,133 @@ def index():
 
 @app.route("/api/vessels", methods=["GET"])
 def get_vessels():
-    vessels = load_vessels()
-
-    for vessel in vessels:
-        existing = find_existing_file(vessel.get("name", ""))
-        vessel["consentFile"] = existing if existing else ""
-
-    return jsonify(vessels)
+    return jsonify(load_vessels())
 
 
 @app.route("/api/vessel", methods=["POST"])
 def save_single_vessel():
-    incoming = request.get_json(force=True)
+    try:
+        data = request.get_json(silent=True) or {}
 
-    if not isinstance(incoming, dict):
-        return jsonify({"success": False, "message": "데이터 형식이 올바르지 않습니다."}), 400
+        vessel_name = str(data.get("name", "")).strip()
+        original_name = str(data.get("_originalName", "")).strip()
 
-    vessel_name = (incoming.get("name") or "").strip()
-    if not vessel_name:
-        return jsonify({"success": False, "message": "선박명은 필수입니다."}), 400
+        if not vessel_name:
+            return jsonify({"success": False, "message": "선박명이 없습니다."}), 400
 
-    # 저장 직전에 최신 JSON 다시 읽기
-    vessels = load_vessels()
+        try:
+            latitude = float(data.get("latitude"))
+            longitude = float(data.get("longitude"))
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "위도 또는 경도 값이 올바르지 않습니다."}), 400
 
-    normalized = normalize_vessel(incoming)
+        vessels = load_vessels()
 
-    existing_file = find_existing_file(vessel_name)
-    normalized["consentFile"] = existing_file if existing_file else normalized.get("consentFile", "")
+        target_index = None
+        old_vessel = None
 
-    updated = False
-    old_name = (incoming.get("_originalName") or "").strip()
+        if original_name:
+            for i, vessel in enumerate(vessels):
+                if str(vessel.get("name", "")).strip().lower() == original_name.lower():
+                    target_index = i
+                    old_vessel = vessel
+                    break
 
-    for i, vessel in enumerate(vessels):
-        current_name = (vessel.get("name") or "").strip()
+        if target_index is None:
+            for i, vessel in enumerate(vessels):
+                if str(vessel.get("name", "")).strip().lower() == vessel_name.lower():
+                    target_index = i
+                    old_vessel = vessel
+                    break
 
-        if old_name:
-            if current_name.lower() == old_name.lower():
-                # 이름이 바뀌는 경우 기존 업로드 파일명도 같이 변경
-                if old_name.lower() != vessel_name.lower():
-                    old_file = find_existing_file(old_name)
-                    if old_file:
-                        old_path = os.path.join(UPLOAD_DIR, old_file)
-                        ext = old_file.rsplit(".", 1)[1].lower()
-                        new_filename = safe_vessel_filename(vessel_name, ext)
-                        new_path = os.path.join(UPLOAD_DIR, new_filename)
-                        if os.path.exists(old_path):
-                            os.replace(old_path, new_path)
-                        normalized["consentFile"] = new_filename
-                vessels[i] = normalized
-                updated = True
-                break
+        normalized = normalize_vessel_data(data, old_vessel)
+        normalized["latitude"] = latitude
+        normalized["longitude"] = longitude
+
+        if target_index is not None:
+            vessels[target_index] = normalized
         else:
-            if current_name.lower() == vessel_name.lower():
-                vessels[i] = normalized
-                updated = True
-                break
+            vessels.append(normalized)
 
-    if not updated:
-        vessels.append(normalized)
-
-    save_vessels(vessels)
-
-    return jsonify({"success": True, "message": "저장되었습니다."})
+        save_vessels(vessels)
+        return jsonify({"success": True, "message": "저장 완료"})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"저장 중 오류: {str(e)}"}), 500
 
 
 @app.route("/api/vessel/<path:vessel_name>", methods=["DELETE"])
 def delete_single_vessel(vessel_name):
-    vessel_name = vessel_name.strip()
-    vessels = load_vessels()
+    try:
+        target_name = vessel_name.strip().lower()
+        vessels = load_vessels()
 
-    new_vessels = [
-        v for v in vessels
-        if (v.get("name") or "").strip().lower() != vessel_name.lower()
-    ]
+        new_vessels = [
+            vessel for vessel in vessels
+            if str(vessel.get("name", "")).strip().lower() != target_name
+        ]
 
-    if len(new_vessels) == len(vessels):
-        return jsonify({"success": False, "message": "삭제할 선박을 찾지 못했습니다."}), 404
+        if len(new_vessels) == len(vessels):
+            return jsonify({"success": False, "message": "삭제할 선박을 찾지 못했습니다."}), 404
 
-    save_vessels(new_vessels)
-
-    old_file = find_existing_file(vessel_name)
-    if old_file:
-        old_path = os.path.join(UPLOAD_DIR, old_file)
-        if os.path.exists(old_path):
-            os.remove(old_path)
-
-    return jsonify({"success": True, "message": "삭제되었습니다."})
+        save_vessels(new_vessels)
+        return jsonify({"success": True, "message": "삭제 완료"})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"삭제 중 오류: {str(e)}"}), 500
 
 
 @app.route("/api/upload-consent", methods=["POST"])
 def upload_consent():
-    vessel_name = request.form.get("vesselName", "").strip()
-    file = request.files.get("file")
+    try:
+        vessel_name = request.form.get("vesselName", "").strip()
+        file = request.files.get("file")
 
-    if not vessel_name:
-        return jsonify({"success": False, "message": "선박명이 없습니다."}), 400
+        if not vessel_name:
+            return jsonify({"success": False, "message": "선박명이 없습니다."}), 400
 
-    if not file or file.filename == "":
-        return jsonify({"success": False, "message": "업로드할 파일이 없습니다."}), 400
+        if not file or file.filename == "":
+            return jsonify({"success": False, "message": "업로드할 파일이 없습니다."}), 400
 
-    if not allowed_file(file.filename):
-        return jsonify({"success": False, "message": "허용되지 않는 파일 형식입니다."}), 400
+        if not allowed_file(file.filename):
+            return jsonify({"success": False, "message": "허용되지 않는 파일 형식입니다."}), 400
 
-    old_file = find_existing_file(vessel_name)
-    if old_file:
-        old_path = os.path.join(UPLOAD_DIR, old_file)
-        if os.path.exists(old_path):
-            os.remove(old_path)
+        vessels = load_vessels()
 
-    ext = file.filename.rsplit(".", 1)[1].lower()
-    new_filename = safe_vessel_filename(vessel_name, ext)
-    save_path = os.path.join(UPLOAD_DIR, new_filename)
-    file.save(save_path)
+        target_index = None
+        for i, vessel in enumerate(vessels):
+            if str(vessel.get("name", "")).strip().lower() == vessel_name.lower():
+                target_index = i
+                break
 
-    # 업로드 직전에 최신 json 다시 읽고 해당 선박만 반영
-    vessels = load_vessels()
-    updated = False
+        if target_index is None:
+            return jsonify({"success": False, "message": "해당 선박을 찾을 수 없습니다."}), 404
 
-    for vessel in vessels:
-        if (vessel.get("name") or "").strip().lower() == vessel_name.lower():
-            vessel["consentFile"] = new_filename
-            vessel["consentLetter"] = "확보"
-            updated = True
-            break
+        ext = file.filename.rsplit(".", 1)[1].lower()
+        safe_name = secure_filename(vessel_name.upper().replace(" ", "_"))
+        new_filename = f"{safe_name}.{ext}"
+        save_path = os.path.join(UPLOAD_DIR, new_filename)
 
-    if not updated:
-        vessels.append({
-            "name": vessel_name,
-            "fujairahConsent": "확인중",
-            "yanbuConsent": "확인중",
-            "consentLetter": "확보",
-            "consentFile": new_filename,
-            "crewPlanStatus": "불요",
-            "crewCount": "",
-            "crewDate": "",
-            "crewPort": "",
-            "crewPlanDetail": "",
-            "bonusCount": "",
-            "bonusAmount": "",
-            "latitude": "",
-            "longitude": ""
+        old_filename = str(vessels[target_index].get("consentFile", "")).strip()
+        if old_filename:
+            old_path = os.path.join(UPLOAD_DIR, old_filename)
+            if os.path.exists(old_path) and old_filename != new_filename:
+                try:
+                    os.remove(old_path)
+                except Exception:
+                    pass
+
+        file.save(save_path)
+
+        vessels[target_index]["consentFile"] = new_filename
+        save_vessels(vessels)
+
+        return jsonify({
+            "success": True,
+            "message": "동의서 업로드 완료",
+            "filename": new_filename
         })
 
-    save_vessels(vessels)
-
-    return jsonify({
-        "success": True,
-        "message": "동의서가 업로드되었습니다.",
-        "filename": new_filename,
-        "viewUrl": f"/uploads/consent_letters/{new_filename}"
-    })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"업로드 중 오류: {str(e)}"}), 500
 
 
 @app.route("/uploads/consent_letters/<path:filename>")
