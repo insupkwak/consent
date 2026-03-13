@@ -93,13 +93,10 @@ function makeOptionalLine(label, value, className = 'map-value-normal') {
 }
 
 function getVesselColor(vessel) {
-
-  // 동의서 미확보는 무조건 빨간색
   if (normalizeConsent(vessel.consentLetter) === '미확보') {
     return 'red';
   }
 
-  // 선원교대계획 기준 색상
   if (vessel.crewPlanStatus === '확정') {
     return 'yellow';
   }
@@ -108,7 +105,6 @@ function getVesselColor(vessel) {
     return 'red';
   }
 
-  // 교대 불요
   return 'green';
 }
 
@@ -320,7 +316,10 @@ function updateStatusBoard() {
 
 async function loadData() {
   try {
-    const response = await fetch('/api/vessels');
+    const response = await fetch(`/api/vessels?_=${Date.now()}`, {
+      cache: 'no-store'
+    });
+
     vessels = await response.json();
 
     if (!Array.isArray(vessels)) {
@@ -347,22 +346,47 @@ async function loadData() {
   }
 }
 
-async function saveData() {
+async function saveSingleVessel(vesselData) {
   try {
-    const response = await fetch('/api/vessels', {
+    const response = await fetch('/api/vessel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(vessels)
+      body: JSON.stringify(vesselData)
     });
 
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      alert('저장 중 오류가 발생했습니다.');
+      alert(result.message || '저장 중 오류가 발생했습니다.');
+      return false;
     }
+
+    return true;
   } catch (error) {
     console.error('데이터 저장 실패:', error);
     alert('서버 저장에 실패했습니다.');
+    return false;
+  }
+}
+
+async function deleteSingleVesselByName(vesselName) {
+  try {
+    const response = await fetch(`/api/vessel/${encodeURIComponent(vesselName)}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      alert(result.message || '삭제 중 오류가 발생했습니다.');
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('데이터 삭제 실패:', error);
+    alert('서버 삭제에 실패했습니다.');
+    return false;
   }
 }
 
@@ -385,12 +409,9 @@ async function uploadConsentFile(index, file) {
       return;
     }
 
-    vessel.consentFile = result.filename || '';
-    alert('동의서가 업로드되었습니다. 기존 파일은 덮어쓰기 되었습니다.');
-    updateStatusBoard();
-    renderList();
-    renderMap(false);
+    await loadData();
     renderSearchSuggestions(shipSearchInput.value.trim());
+    alert('동의서가 업로드되었습니다. 기존 파일은 덮어쓰기 되었습니다.');
   } catch (error) {
     console.error(error);
     alert('동의서 업로드 중 오류가 발생했습니다.');
@@ -444,11 +465,10 @@ function renderMap(fitBounds = false) {
       icon: getShipIcon(vessel)
     }).addTo(map);
 
-marker.on('click', () => {
-  fillFormByVessel(globalIndex);
-
-  handleShipClick(globalIndex);
-});
+    marker.on('click', () => {
+      fillFormByVessel(globalIndex);
+      handleShipClick(globalIndex);
+    });
 
     markers.push(marker);
     visibleMarkers.push(marker);
@@ -626,14 +646,14 @@ function renderExternalLabels() {
   leftItems.sort((a, b) => a.point.y - b.point.y);
   rightItems.sort((a, b) => a.point.y - b.point.y);
 
-const boxW = 250;
-const boxH = 250;
-const gap = 10;
+  const boxW = 250;
+  const boxH = 250;
+  const gap = 10;
 
-const topY = 70;
-const bottomY = wrapHeight - boxH - 0;
-const leftX = 16;
-const rightX = wrapWidth - boxW - 16;
+  const topY = 70;
+  const bottomY = wrapHeight - boxH - 0;
+  const leftX = 16;
+  const rightX = wrapWidth - boxW - 16;
 
   const topSlots = distributeHorizontalSlots(topItems.length, wrapWidth, boxW, gap, 16, 16);
   const bottomSlots = distributeHorizontalSlots(bottomItems.length, wrapWidth, boxW, gap, 16, 16);
@@ -846,8 +866,9 @@ consentFileInput.addEventListener('change', async (e) => {
 form.addEventListener('submit', async function (e) {
   e.preventDefault();
 
+  const originalName = editIndex !== null ? (vessels[editIndex]?.name || '') : '';
+
   const vessel = {
-    ...(vessels[editIndex] || {}),
     name: document.getElementById('vesselName').value.trim(),
     fujairahConsent: document.getElementById('fujairahConsent').value,
     yanbuConsent: document.getElementById('yanbuConsent').value,
@@ -860,7 +881,8 @@ form.addEventListener('submit', async function (e) {
     bonusCount: document.getElementById('bonusCount').value.trim(),
     bonusAmount: document.getElementById('bonusAmount').value.trim(),
     latitude: parseFloat(document.getElementById('latitude').value),
-    longitude: parseFloat(document.getElementById('longitude').value)
+    longitude: parseFloat(document.getElementById('longitude').value),
+    _originalName: originalName
   };
 
   if (!vessel.name || Number.isNaN(vessel.latitude) || Number.isNaN(vessel.longitude)) {
@@ -868,22 +890,25 @@ form.addEventListener('submit', async function (e) {
     return;
   }
 
-  if (editIndex === null) {
-    vessels.push(vessel);
+  const ok = await saveSingleVessel(vessel);
+  if (!ok) return;
+
+  await loadData();
+
+  const newIndex = vessels.findIndex(v => (v.name || '').trim().toLowerCase() === vessel.name.toLowerCase());
+  if (newIndex >= 0) {
+    editIndex = newIndex;
+    activeLabelIndex = newIndex;
+    labelMode = 'one';
   } else {
-    vessels[editIndex] = vessel;
+    editIndex = null;
   }
 
-  await saveData();
-  updateStatusBoard();
-  renderList();
-  renderMap(false);
   renderSearchSuggestions(shipSearchInput.value.trim());
   resetForm();
 });
 
 resetBtn.addEventListener('click', resetForm);
-
 
 function fillFormByVessel(index) {
   const vessel = vessels[index];
@@ -906,37 +931,37 @@ function fillFormByVessel(index) {
   editIndex = index;
 }
 
-
 window.editVessel = function (index) {
   fillFormByVessel(index);
-
-
   labelMode = 'one';
   activeLabelIndex = index;
   renderExternalLabels();
 };
 
-
 window.deleteVessel = async function (index) {
+  const vessel = vessels[index];
+  if (!vessel) return;
+
   if (!confirm('이 선박 정보를 삭제하시겠습니까?')) return;
 
-  vessels.splice(index, 1);
+  const ok = await deleteSingleVesselByName(vessel.name);
+  if (!ok) return;
+
+  await loadData();
 
   if (activeLabelIndex === index) {
     activeLabelIndex = null;
     labelMode = 'none';
-  } else if (activeLabelIndex !== null && index < activeLabelIndex) {
-    activeLabelIndex -= 1;
+  } else {
+    activeLabelIndex = null;
   }
 
-  await saveData();
-  updateStatusBoard();
-  renderList();
-  renderMap(false);
   renderSearchSuggestions(shipSearchInput.value.trim());
 
   if (editIndex === index) {
     resetForm();
+  } else {
+    editIndex = null;
   }
 };
 
