@@ -45,6 +45,7 @@ let labelMode = 'none';
 let activeLabelIndex = null;
 let currentFilter = 'all';
 let uploadTargetIndex = null;
+let isLoading = false;
 
 const shipSvg = (color) => `
   <div class="ship-icon">
@@ -199,7 +200,7 @@ function getFilteredVessels() {
 }
 
 function getConsentViewUrl(vessel) {
-  return vessel.consentFile ? `/uploads/consent_letters/${encodeURIComponent(vessel.consentFile)}` : '';
+  return vessel.consentFile ? `/uploads/consent_letters/${encodeURIComponent(vessel.consentFile)}?_=${Date.now()}` : '';
 }
 
 function makeConsentButtons(index, vessel) {
@@ -315,11 +316,38 @@ function updateStatusBoard() {
   updateToolbarButtons();
 }
 
-async function loadData() {
+async function loadData(options = {}) {
+  const {
+    preserveSelection = true,
+    silent = false,
+    fitBounds = false
+  } = options;
+
+  if (isLoading) return;
+
+  isLoading = true;
+
+  const previousEditName = preserveSelection && editIndex !== null && vessels[editIndex]
+    ? String(vessels[editIndex].name || '').trim().toLowerCase()
+    : '';
+
+  const previousActiveName = preserveSelection && activeLabelIndex !== null && vessels[activeLabelIndex]
+    ? String(vessels[activeLabelIndex].name || '').trim().toLowerCase()
+    : '';
+
   try {
     const response = await fetch(`/api/vessels?_=${Date.now()}`, {
-      cache: 'no-store'
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
     });
+
+    if (!response.ok) {
+      throw new Error(`데이터 불러오기 실패: ${response.status}`);
+    }
 
     vessels = await response.json();
 
@@ -334,25 +362,52 @@ async function loadData() {
       voyagePlan: v.voyagePlan || ''
     }));
 
+    if (previousEditName) {
+      const newEditIndex = vessels.findIndex(v => String(v.name || '').trim().toLowerCase() === previousEditName);
+      editIndex = newEditIndex >= 0 ? newEditIndex : null;
+    }
+
+    if (previousActiveName) {
+      const newActiveIndex = vessels.findIndex(v => String(v.name || '').trim().toLowerCase() === previousActiveName);
+      activeLabelIndex = newActiveIndex >= 0 ? newActiveIndex : null;
+      if (newActiveIndex < 0 && labelMode === 'one') {
+        labelMode = 'none';
+      }
+    }
+
     updateStatusBoard();
     renderList();
-    renderMap(true);
+    renderMap(fitBounds);
     renderSearchSuggestions('');
+
+    if (!silent) {
+      console.log('최신 데이터 동기화 완료');
+    }
   } catch (error) {
     console.error('데이터 불러오기 실패:', error);
     vessels = [];
+    editIndex = null;
+    activeLabelIndex = null;
+    labelMode = 'none';
     updateStatusBoard();
     renderList();
-    renderMap(true);
+    renderMap(fitBounds);
     renderSearchSuggestions('');
+  } finally {
+    isLoading = false;
   }
 }
 
 async function saveSingleVessel(vesselData) {
   try {
-    const response = await fetch('/api/vessel', {
+    const response = await fetch(`/api/vessel?_=${Date.now()}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      },
       body: JSON.stringify(vesselData)
     });
 
@@ -373,8 +428,13 @@ async function saveSingleVessel(vesselData) {
 
 async function deleteSingleVesselByName(vesselName) {
   try {
-    const response = await fetch(`/api/vessel/${encodeURIComponent(vesselName)}`, {
-      method: 'DELETE'
+    const response = await fetch(`/api/vessel/${encodeURIComponent(vesselName)}?_=${Date.now()}`, {
+      method: 'DELETE',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
     });
 
     const result = await response.json();
@@ -399,9 +459,14 @@ async function uploadConsentFile(index, file) {
   formData.append('file', file);
 
   try {
-    const response = await fetch('/api/upload-consent', {
+    const response = await fetch(`/api/upload-consent?_=${Date.now()}`, {
       method: 'POST',
-      body: formData
+      cache: 'no-store',
+      body: formData,
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
     });
 
     const result = await response.json();
@@ -411,7 +476,7 @@ async function uploadConsentFile(index, file) {
       return;
     }
 
-    await loadData();
+    await loadData({ preserveSelection: true, fitBounds: false });
     renderSearchSuggestions(shipSearchInput.value.trim());
     alert('동의서가 업로드되었습니다. 기존 파일은 덮어쓰기 되었습니다.');
   } catch (error) {
@@ -897,19 +962,19 @@ form.addEventListener('submit', async function (e) {
   const ok = await saveSingleVessel(vessel);
   if (!ok) return;
 
-  await loadData();
+  await loadData({ preserveSelection: true, fitBounds: false });
 
   const newIndex = vessels.findIndex(v => (v.name || '').trim().toLowerCase() === vessel.name.toLowerCase());
   if (newIndex >= 0) {
     editIndex = newIndex;
     activeLabelIndex = newIndex;
     labelMode = 'one';
+    fillFormByVessel(newIndex);
   } else {
     editIndex = null;
   }
 
   renderSearchSuggestions(shipSearchInput.value.trim());
-  resetForm();
 });
 
 resetBtn.addEventListener('click', resetForm);
@@ -952,7 +1017,7 @@ window.deleteVessel = async function (index) {
   const ok = await deleteSingleVesselByName(vessel.name);
   if (!ok) return;
 
-  await loadData();
+  await loadData({ preserveSelection: false });
 
   if (activeLabelIndex === index) {
     activeLabelIndex = null;
@@ -997,4 +1062,22 @@ window.addEventListener('resize', () => {
   setTimeout(updateLeaderLines, 30);
 });
 
-loadData();
+/* 동기화 로직 */
+window.addEventListener('focus', () => {
+  loadData({ preserveSelection: true, silent: true });
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    loadData({ preserveSelection: true, silent: true });
+  }
+});
+
+/* 600초 = 10분 */
+setInterval(() => {
+  if (document.visibilityState === 'visible') {
+    loadData({ preserveSelection: true, silent: true });
+  }
+}, 600000);
+
+loadData({ preserveSelection: true, fitBounds: true });

@@ -1,6 +1,7 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, abort
 import json
 import os
+import tempfile
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -8,21 +9,18 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 서버환경
-DATA_DIR = "/home/opc/data/consent"
-DATA_FILE = os.path.join(DATA_DIR, "vessels.json")
-UPLOAD_DIR = os.path.join(DATA_DIR, "uploads", "consent_letters")
+# DATA_DIR = "/home/opc/data/consent"
+# DATA_FILE = os.path.join(DATA_DIR, "vessels.json")
+# UPLOAD_DIR = os.path.join(DATA_DIR, "uploads", "consent_letters")
+# os.makedirs(DATA_DIR, exist_ok=True)
+# os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-os.makedirs(DATA_DIR, exist_ok=True)
+# PC 환경
+DATA_FILE = os.path.join(BASE_DIR, "vessels.json")
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "consent_letters")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
-
-# PC 환경
-# DATA_FILE = os.path.join(BASE_DIR, "vessels.json")
-# UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "consent_letters")
-# os.makedirs(UPLOAD_DIR, exist_ok=True)
-# ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
-
 
 
 def allowed_file(filename):
@@ -43,10 +41,28 @@ def load_vessels():
         return []
 
 
-def save_vessels(vessels):
+def save_vessels_atomic(vessels):
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(vessels, f, ensure_ascii=False, indent=2)
+
+    fd, temp_path = tempfile.mkstemp(
+        dir=os.path.dirname(DATA_FILE),
+        prefix="vessels_",
+        suffix=".tmp"
+    )
+
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(vessels, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(temp_path, DATA_FILE)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
 
 
 def normalize_vessel_data(data, old_vessel=None):
@@ -71,9 +87,34 @@ def normalize_vessel_data(data, old_vessel=None):
     }
 
 
+def get_asset_version():
+    paths = [
+        os.path.join(BASE_DIR, "templates", "index.html"),
+        os.path.join(app.static_folder, "js", "app.js"),
+        os.path.join(app.static_folder, "css", "style.css"),
+        DATA_FILE
+    ]
+
+    mtimes = []
+    for path in paths:
+        if os.path.exists(path):
+            mtimes.append(str(int(os.path.getmtime(path))))
+
+    return "-".join(mtimes) if mtimes else "1"
+
+
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["Surrogate-Control"] = "no-store"
+    return response
+
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", version=get_asset_version())
 
 
 @app.route("/api/vessels", methods=["GET"])
@@ -126,7 +167,7 @@ def save_single_vessel():
         else:
             vessels.append(normalized)
 
-        save_vessels(vessels)
+        save_vessels_atomic(vessels)
         return jsonify({"success": True, "message": "저장 완료"})
     except Exception as e:
         return jsonify({"success": False, "message": f"저장 중 오류: {str(e)}"}), 500
@@ -146,7 +187,7 @@ def delete_single_vessel(vessel_name):
         if len(new_vessels) == len(vessels):
             return jsonify({"success": False, "message": "삭제할 선박을 찾지 못했습니다."}), 404
 
-        save_vessels(new_vessels)
+        save_vessels_atomic(new_vessels)
         return jsonify({"success": True, "message": "삭제 완료"})
     except Exception as e:
         return jsonify({"success": False, "message": f"삭제 중 오류: {str(e)}"}), 500
@@ -195,7 +236,7 @@ def upload_consent():
         file.save(save_path)
 
         vessels[target_index]["consentFile"] = new_filename
-        save_vessels(vessels)
+        save_vessels_atomic(vessels)
 
         return jsonify({
             "success": True,
@@ -209,7 +250,15 @@ def upload_consent():
 
 @app.route("/uploads/consent_letters/<path:filename>")
 def uploaded_consent_file(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.exists(file_path):
+        abort(404)
+
+    response = send_from_directory(UPLOAD_DIR, filename, as_attachment=False, conditional=False)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 if __name__ == "__main__":

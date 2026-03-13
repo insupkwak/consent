@@ -6,7 +6,7 @@
   <title>선박 위치 및 동의 현황 관리</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=version) }}" />
 </head>
 <body>
   <div class="container">
@@ -97,7 +97,7 @@
           <div id="shipSearchDropdown" class="search-dropdown"></div>
         </div>
 
-        <button type="button" id="toggleAllLabelsBtn" class="toolbar-chip toolbar-chip-btn">
+        <button type="button" id="toggleAllLabelsBtn" class="toolbar-chip toolbar-chip-btn active">
           <span class="toolbar-chip-label">전체보기</span>
           <span class="toolbar-chip-value">ON/OFF</span>
         </button>
@@ -146,6 +146,6 @@
   <input type="file" id="consentFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp" hidden />
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js', v=version) }}"></script>
 </body>
 </html>
