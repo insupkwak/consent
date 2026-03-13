@@ -490,17 +490,20 @@ button:hover {
 
 @media (max-width: 1100px) {
   .container {
-    grid-template-columns: 1fr;
-    height: auto;
+    display: block;
+    height: 100vh;
   }
 
   .sidebar {
-    height: auto;
+    display: none;
   }
 
-  .map-wrap,
+  .map-wrap {
+    height: 100vh;
+  }
+
   #map {
-    height: 70vh;
+    height: 100vh;
   }
 
   .map-toolbar {
@@ -520,3 +523,4 @@ button:hover {
     min-width: 112px;
   }
 }
+

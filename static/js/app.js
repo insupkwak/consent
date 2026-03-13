@@ -446,7 +446,7 @@ function renderMap(fitBounds = false) {
 
 marker.on('click', () => {
   fillFormByVessel(globalIndex);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+
   handleShipClick(globalIndex);
 });
 
@@ -626,14 +626,14 @@ function renderExternalLabels() {
   leftItems.sort((a, b) => a.point.y - b.point.y);
   rightItems.sort((a, b) => a.point.y - b.point.y);
 
-  const boxW = 250;
-  const boxH = 250;
-  const gap = 18;
+const boxW = 250;
+const boxH = 250;
+const gap = 10;
 
-  const topY = 16;
-  const bottomY = wrapHeight - boxH - 10;
-  const leftX = 16;
-  const rightX = wrapWidth - boxW - 16;
+const topY = 70;
+const bottomY = wrapHeight - boxH - 0;
+const leftX = 16;
+const rightX = wrapWidth - boxW - 16;
 
   const topSlots = distributeHorizontalSlots(topItems.length, wrapWidth, boxW, gap, 16, 16);
   const bottomSlots = distributeHorizontalSlots(bottomItems.length, wrapWidth, boxW, gap, 16, 16);
@@ -909,7 +909,7 @@ function fillFormByVessel(index) {
 
 window.editVessel = function (index) {
   fillFormByVessel(index);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+
 
   labelMode = 'one';
   activeLabelIndex = index;
