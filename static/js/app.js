@@ -285,6 +285,18 @@ function updateToolbarButtons() {
   if (buttonMap[currentFilter]) {
     buttonMap[currentFilter].classList.add('active');
   }
+
+  updateToggleAllLabelsButton();
+}
+
+function updateToggleAllLabelsButton() {
+  if (!toggleAllLabelsBtn) return;
+
+  if (labelMode === 'all') {
+    toggleAllLabelsBtn.classList.add('active');
+  } else {
+    toggleAllLabelsBtn.classList.remove('active');
+  }
 }
 
 function updateStatusBoard() {
@@ -926,6 +938,8 @@ toggleAllLabelsBtn.addEventListener('click', () => {
     labelMode = 'all';
     activeLabelIndex = null;
   }
+
+  updateToggleAllLabelsButton();
   renderExternalLabels();
 });
 
