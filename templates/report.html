@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>선박 동의 현황 Report</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=version) }}" />
+</head>
+<body class="report-page-body">
+  <div class="report-page report-page-wide">
+    <div class="report-header">
+      <div>
+        <h1>선박 동의 현황 Report</h1>
+        <div class="report-subtitle">Generated at {{ generated_at }}</div>
+      </div>
+
+      <div class="report-actions">
+        <button type="button" class="report-action-btn" onclick="window.print()">인쇄 / PDF 저장</button>
+        <button type="button" class="report-action-btn secondary" onclick="window.close()">닫기</button>
+      </div>
+    </div>
+
+    <div class="report-summary-grid report-summary-grid-wide">
+      <div class="report-summary-card report-summary-card-main">
+        <div class="label">전체 선박</div>
+        <div class="value">{{ summary.total }}척</div>
+      </div>
+      <div class="report-summary-card good">
+        <div class="label">푸자이라 동의</div>
+        <div class="value">{{ summary.fujairah_yes }}척</div>
+      </div>
+      <div class="report-summary-card good">
+        <div class="label">얀부 동의</div>
+        <div class="value">{{ summary.yanbu_yes }}척</div>
+      </div>
+      <div class="report-summary-card danger">
+        <div class="label">동의서 미확보</div>
+        <div class="value">{{ summary.no_consent }}척</div>
+      </div>
+      <div class="report-summary-card warning">
+        <div class="label">선원교대 확정</div>
+        <div class="value">{{ summary.crew_confirmed }}척</div>
+      </div>
+      <div class="report-summary-card danger">
+        <div class="label">선원교대 미정</div>
+        <div class="value">{{ summary.crew_pending }}척</div>
+      </div>
+    </div>
+
+    <div class="report-table-wrap">
+      <table class="report-table report-table-enhanced">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>선박명</th>
+            <th>푸자이라항 동의 여부</th>
+            <th>얀부항 동의 여부</th>
+            <th>동의서 확보 상태</th>
+            <th>항차계획</th>
+            <th>선원교대 계획</th>
+            <th>선원교대 인원</th>
+            <th>선원교대 날짜</th>
+            <th>선원교대 항구</th>
+            <th>선원교대 상세</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td class="left strong">{{ row.name }}</td>
+            <td>
+              <span class="report-badge
+                {% if row.fujairahConsent == '동의' %}good
+                {% elif row.fujairahConsent == '미동의' %}danger
+                {% else %}normal{% endif %}">
+                {{ row.fujairahConsent }}
+              </span>
+            </td>
+            <td>
+              <span class="report-badge
+                {% if row.yanbuConsent == '동의' %}good
+                {% elif row.yanbuConsent == '미동의' %}danger
+                {% else %}normal{% endif %}">
+                {{ row.yanbuConsent }}
+              </span>
+            </td>
+            <td>
+              <span class="report-badge
+                {% if row.consentLetter == '확보' %}good
+                {% elif row.consentLetter == '미확보' %}danger
+                {% else %}normal{% endif %}">
+                {{ row.consentLetter }}
+              </span>
+            </td>
+            <td class="left">{{ row.voyagePlan }}</td>
+            <td>
+              <span class="report-badge
+                {% if row.crewPlanStatus == '불요' %}good
+                {% elif row.crewPlanStatus == '확정' %}warning
+                {% elif row.crewPlanStatus == '미정' %}danger
+                {% else %}normal{% endif %}">
+                {{ row.crewPlanStatus }}
+              </span>
+            </td>
+            <td>{{ row.crewCount }}</td>
+            <td>{{ row.crewDate }}</td>
+            <td>{{ row.crewPort }}</td>
+            <td class="left">{{ row.crewPlanDetail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

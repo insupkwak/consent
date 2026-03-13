@@ -14,6 +14,7 @@ const resetBtn = document.getElementById('resetBtn');
 const mapWrap = document.getElementById('mapWrap');
 const labelLayer = document.getElementById('labelLayer');
 const consentFileInput = document.getElementById('consentFileInput');
+const reportViewBtn = document.getElementById('reportViewBtn');
 
 const toggleAllLabelsBtn = document.getElementById('toggleAllLabelsBtn');
 const filterAllBtn = document.getElementById('filterAllBtn');
@@ -979,6 +980,12 @@ form.addEventListener('submit', async function (e) {
 
 resetBtn.addEventListener('click', resetForm);
 
+if (reportViewBtn) {
+  reportViewBtn.addEventListener('click', () => {
+    window.open(`/report?_=${Date.now()}`, '_blank');
+  });
+}
+
 function fillFormByVessel(index) {
   const vessel = vessels[index];
   if (!vessel) return;
@@ -1017,7 +1024,7 @@ window.deleteVessel = async function (index) {
   const ok = await deleteSingleVesselByName(vessel.name);
   if (!ok) return;
 
-  await loadData({ preserveSelection: false });
+  await loadData({ preserveSelection: false, fitBounds: false });
 
   if (activeLabelIndex === index) {
     activeLabelIndex = null;
@@ -1062,21 +1069,19 @@ window.addEventListener('resize', () => {
   setTimeout(updateLeaderLines, 30);
 });
 
-/* 동기화 로직 */
 window.addEventListener('focus', () => {
-  loadData({ preserveSelection: true, silent: true });
+  loadData({ preserveSelection: true, silent: true, fitBounds: false });
 });
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    loadData({ preserveSelection: true, silent: true });
+    loadData({ preserveSelection: true, silent: true, fitBounds: false });
   }
 });
 
-/* 600초 = 10분 */
 setInterval(() => {
   if (document.visibilityState === 'visible') {
-    loadData({ preserveSelection: true, silent: true });
+    loadData({ preserveSelection: true, silent: true, fitBounds: false });
   }
 }, 600000);
 
