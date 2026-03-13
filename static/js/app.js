@@ -15,6 +15,8 @@ const mapWrap = document.getElementById('mapWrap');
 const labelLayer = document.getElementById('labelLayer');
 const consentFileInput = document.getElementById('consentFileInput');
 const reportViewBtn = document.getElementById('reportViewBtn');
+const positionUpdateBtn = document.getElementById('positionUpdateBtn');
+const positionExcelInput = document.getElementById('positionExcelInput');
 
 const toggleAllLabelsBtn = document.getElementById('toggleAllLabelsBtn');
 const filterAllBtn = document.getElementById('filterAllBtn');
@@ -486,6 +488,44 @@ async function uploadConsentFile(index, file) {
   }
 }
 
+async function uploadPositionExcel(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const response = await fetch(`/api/upload-positions?_=${Date.now()}`, {
+      method: 'POST',
+      cache: 'no-store',
+      body: formData,
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      alert(result.message || '위치 업데이트에 실패했습니다.');
+      return;
+    }
+
+    await loadData({ preserveSelection: true, fitBounds: false });
+    renderSearchSuggestions(shipSearchInput.value.trim());
+
+    alert(
+      `위치 업데이트 완료\n` +
+      `- 전체 행: ${result.totalRows}건\n` +
+      `- 업데이트: ${result.updatedCount}척\n` +
+      `- 미일치: ${result.notFoundCount}척\n` +
+      `- 좌표오류: ${result.invalidCount}건`
+    );
+  } catch (error) {
+    console.error('위치 업데이트 실패:', error);
+    alert('위치 업데이트 중 오류가 발생했습니다.');
+  }
+}
+
 function clearMarkers() {
   markers.forEach(marker => map.removeLayer(marker));
   markers = [];
@@ -931,6 +971,22 @@ consentFileInput.addEventListener('change', async (e) => {
   consentFileInput.value = '';
   uploadTargetIndex = null;
 });
+
+if (positionUpdateBtn) {
+  positionUpdateBtn.addEventListener('click', () => {
+    positionExcelInput.click();
+  });
+}
+
+if (positionExcelInput) {
+  positionExcelInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    await uploadPositionExcel(file);
+    positionExcelInput.value = '';
+  });
+}
 
 form.addEventListener('submit', async function (e) {
   e.preventDefault();

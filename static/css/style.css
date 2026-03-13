@@ -826,3 +826,11 @@ button:hover {
     box-shadow: none;
   }
 }
+
+#vesselForm button {
+  width: 100%;
+}
+
+#vesselForm button + button {
+  margin-top: 10px;
+}

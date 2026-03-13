@@ -21,7 +21,10 @@
       <div class="card">
         <div class="report-topbar">
           <h2>선박 정보 입력</h2>
-          <button type="button" id="reportViewBtn" class="report-view-btn">Report 보기</button>
+          <div class="report-topbar-actions">
+            
+            <button type="button" id="reportViewBtn" class="report-view-btn">Report 보기</button>
+          </div>
         </div>
 
         <form id="vesselForm">
@@ -85,7 +88,10 @@
 
           <button type="submit">선박 추가 / 저장</button>
           <button type="button" class="btn-secondary" id="resetBtn">입력 초기화</button>
+          <button type="button" class="btn-secondary" id="positionUpdateBtn">위치 업데이트</button>
         </form>
+
+
       </div>
 
       <div class="card">
@@ -148,6 +154,7 @@
   </div>
 
   <input type="file" id="consentFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp" hidden />
+  <input type="file" id="positionExcelInput" accept=".xlsx" hidden />
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="{{ url_for('static', filename='js/app.js', v=version) }}"></script>

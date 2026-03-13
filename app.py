@@ -2,8 +2,10 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 import json
 import os
 import tempfile
+import re
 from datetime import datetime
 from werkzeug.utils import secure_filename
+from openpyxl import load_workbook
 
 app = Flask(__name__)
 
@@ -137,6 +139,173 @@ def report_summary(vessels):
         "crew_confirmed": sum(1 for v in vessels if str(v.get("crewPlanStatus", "")).strip() == "확정"),
         "crew_pending": sum(1 for v in vessels if str(v.get("crewPlanStatus", "")).strip() == "미정"),
     }
+
+
+def normalize_name_for_match(name):
+    return re.sub(r"\s+", " ", str(name or "").strip()).upper()
+
+
+def excel_cell_str(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def normalize_degree_text(text):
+    text = str(text or "").strip()
+    text = text.replace("º", "°")
+    text = text.replace("˚", "°")
+    text = text.replace("’", "'")
+    text = text.replace("‘", "'")
+    text = text.replace("＇", "'")
+    text = text.replace("“", '"')
+    text = text.replace("”", '"')
+    text = text.replace("″", '"')
+    text = text.replace("／", "/")
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def dms_to_decimal(direction, degrees, minutes=0.0, seconds=0.0):
+    value = float(degrees) + float(minutes) / 60.0 + float(seconds) / 3600.0
+    direction = str(direction or "").upper().strip()
+    if direction in {"S", "W"}:
+        value = -value
+    return value
+
+
+def parse_single_coord(token):
+    """
+    지원 예:
+    - W3°20'45.912"
+    - N 20° 15.13'
+    - 36.03322667
+    - E110.55
+    """
+    if token is None:
+        raise ValueError("좌표값이 없습니다.")
+
+    text = normalize_degree_text(token).upper().replace(",", "")
+    text = text.strip()
+
+    if not text:
+        raise ValueError("좌표값이 비어 있습니다.")
+
+    m = re.match(r"^([NSEW])\s*([0-9]+(?:\.[0-9]+)?)\s*$", text)
+    if m:
+        return dms_to_decimal(m.group(1), m.group(2), 0, 0)
+
+    m = re.match(r"^([NSEW])\s*([0-9]+(?:\.[0-9]+)?)°\s*([0-9]+(?:\.[0-9]+)?)'\s*$", text)
+    if m:
+        return dms_to_decimal(m.group(1), m.group(2), m.group(3), 0)
+
+    m = re.match(r"^([NSEW])\s*([0-9]+(?:\.[0-9]+)?)°\s*([0-9]+(?:\.[0-9]+)?)'\s*([0-9]+(?:\.[0-9]+)?)\"\s*$", text)
+    if m:
+        return dms_to_decimal(m.group(1), m.group(2), m.group(3), m.group(4))
+
+    m = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([NSEW])\s*$", text)
+    if m:
+        return dms_to_decimal(m.group(2), m.group(1), 0, 0)
+
+    m = re.match(r"^([+-]?[0-9]+(?:\.[0-9]+)?)\s*$", text)
+    if m:
+        return float(m.group(1))
+
+    raise ValueError(f"좌표 해석 실패: {token}")
+
+
+def parse_combined_position(position_text):
+    """
+    지원 예:
+    1) W3º20'45.912" / 36.03322667
+    2) N 20° 15.13' E 110° 55.48'
+    """
+    text = normalize_degree_text(position_text).upper()
+
+    if not text:
+        raise ValueError("위치 문자열이 비어 있습니다.")
+
+    if "/" in text:
+        parts = [p.strip() for p in text.split("/") if p.strip()]
+        if len(parts) != 2:
+            raise ValueError("슬래시(/) 위치 형식이 올바르지 않습니다.")
+
+        first = parse_single_coord(parts[0])
+        second = parse_single_coord(parts[1])
+
+        first_has_ns = bool(re.search(r"[NS]", parts[0]))
+        first_has_ew = bool(re.search(r"[EW]", parts[0]))
+        second_has_ns = bool(re.search(r"[NS]", parts[1]))
+        second_has_ew = bool(re.search(r"[EW]", parts[1]))
+
+        if first_has_ns:
+            lat = first
+            lon = second
+        elif first_has_ew:
+            lon = first
+            lat = second
+        elif second_has_ns:
+            lon = first
+            lat = second
+        elif second_has_ew:
+            lat = first
+            lon = second
+        else:
+            if abs(first) <= 90 and abs(second) <= 180:
+                lat = first
+                lon = second
+            else:
+                lon = first
+                lat = second
+
+        return lat, lon
+
+    pattern = r'([NSEW])\s*[0-9]+(?:\.[0-9]+)?(?:\s*°\s*[0-9]+(?:\.[0-9]+)?(?:\s*\'\s*[0-9]+(?:\.[0-9]+)?")?\'?)?'
+    matches = list(re.finditer(pattern, text))
+
+    if len(matches) >= 2:
+        coord1 = matches[0].group(0).strip()
+        coord2 = matches[1].group(0).strip()
+
+        value1 = parse_single_coord(coord1)
+        value2 = parse_single_coord(coord2)
+
+        if coord1.startswith(("N", "S")):
+            lat, lon = value1, value2
+        else:
+            lon, lat = value1, value2
+
+        return lat, lon
+
+    raise ValueError(f"지원되지 않는 위치 형식입니다: {position_text}")
+
+
+def extract_position_from_row(row_dict):
+    position_keys = ["위치", "좌표", "POSITION", "Position", "position", "LOCATION", "Location", "location"]
+    lat_keys = ["위도", "LAT", "Lat", "lat", "LATITUDE", "Latitude", "latitude"]
+    lon_keys = ["경도", "LON", "Lon", "lon", "LONGITUDE", "Longitude", "longitude"]
+
+    for key in position_keys:
+        if key in row_dict and excel_cell_str(row_dict.get(key)):
+            return parse_combined_position(row_dict.get(key))
+
+    lat_val = None
+    lon_val = None
+
+    for key in lat_keys:
+        if key in row_dict and excel_cell_str(row_dict.get(key)):
+            lat_val = parse_single_coord(row_dict.get(key))
+            break
+
+    for key in lon_keys:
+        if key in row_dict and excel_cell_str(row_dict.get(key)):
+            lon_val = parse_single_coord(row_dict.get(key))
+            break
+
+    if lat_val is not None and lon_val is not None:
+        return lat_val, lon_val
+
+    raise ValueError("위치 또는 위도/경도 컬럼을 찾지 못했습니다.")
 
 
 @app.after_request
@@ -298,6 +467,99 @@ def upload_consent():
 
     except Exception as e:
         return jsonify({"success": False, "message": f"업로드 중 오류: {str(e)}"}), 500
+
+
+@app.route("/api/upload-positions", methods=["POST"])
+def upload_positions():
+    try:
+        file = request.files.get("file")
+
+        if not file or file.filename == "":
+            return jsonify({"success": False, "message": "업로드할 엑셀 파일이 없습니다."}), 400
+
+        if not file.filename.lower().endswith(".xlsx"):
+            return jsonify({"success": False, "message": "xlsx 파일만 업로드할 수 있습니다."}), 400
+
+        workbook = load_workbook(file, data_only=True)
+        sheet = workbook.active
+
+        rows = list(sheet.iter_rows(values_only=True))
+        if not rows:
+            return jsonify({"success": False, "message": "엑셀 파일이 비어 있습니다."}), 400
+
+        headers = [excel_cell_str(h) for h in rows[0]]
+        if not headers:
+            return jsonify({"success": False, "message": "헤더 행을 찾을 수 없습니다."}), 400
+
+        name_candidates = ["선명", "선박명", "Vessel", "VESSEL", "vessel", "Name", "NAME", "name"]
+        name_key = None
+        for h in headers:
+            if h in name_candidates:
+                name_key = h
+                break
+
+        if not name_key:
+            return jsonify({
+                "success": False,
+                "message": "엑셀에 선명 컬럼이 필요합니다. 예: 선명 또는 선박명"
+            }), 400
+
+        vessels = load_vessels()
+        vessel_map = {
+            normalize_name_for_match(v.get("name", "")): i
+            for i, v in enumerate(vessels)
+        }
+
+        total_rows = 0
+        updated_count = 0
+        not_found_count = 0
+        invalid_count = 0
+        skipped_empty_name = 0
+
+        for row in rows[1:]:
+            row_dict = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
+            vessel_name = excel_cell_str(row_dict.get(name_key))
+
+            if not vessel_name:
+                skipped_empty_name += 1
+                continue
+
+            total_rows += 1
+            normalized_name = normalize_name_for_match(vessel_name)
+
+            target_index = vessel_map.get(normalized_name)
+            if target_index is None:
+                not_found_count += 1
+                continue
+
+            try:
+                lat, lon = extract_position_from_row(row_dict)
+            except Exception:
+                invalid_count += 1
+                continue
+
+            if abs(lat) > 90 or abs(lon) > 180:
+                invalid_count += 1
+                continue
+
+            vessels[target_index]["latitude"] = float(lat)
+            vessels[target_index]["longitude"] = float(lon)
+            updated_count += 1
+
+        save_vessels_atomic(vessels)
+
+        return jsonify({
+            "success": True,
+            "message": "위치 업데이트 완료",
+            "totalRows": total_rows,
+            "updatedCount": updated_count,
+            "notFoundCount": not_found_count,
+            "invalidCount": invalid_count,
+            "skippedEmptyName": skipped_empty_name
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"위치 업데이트 중 오류: {str(e)}"}), 500
 
 
 @app.route("/uploads/consent_letters/<path:filename>")
