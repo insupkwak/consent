@@ -151,6 +151,15 @@ def excel_cell_str(value):
     return str(value).strip()
 
 
+def safe_float(value):
+    try:
+        if value is None or str(value).strip() == "":
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
 def normalize_degree_text(text):
     text = str(text or "").strip()
     text = text.replace("º", "°")
@@ -172,6 +181,89 @@ def dms_to_decimal(direction, degrees, minutes=0.0, seconds=0.0):
     if direction in {"S", "W"}:
         value = -value
     return value
+
+
+def parse_excel_datetime(value):
+    if value is None or value == "":
+        return None
+
+    if isinstance(value, datetime):
+        return value
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    patterns = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y/%m/%d %H:%M:%S",
+        "%Y/%m/%d %H:%M",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%Y",
+    ]
+    for fmt in patterns:
+        try:
+            return datetime.strptime(text, fmt)
+        except Exception:
+            continue
+    return None
+
+
+def parse_degree_minute_coordinate(degree, minute, hemisphere, coord_type):
+    deg = safe_float(degree)
+    minute_val = safe_float(minute)
+    hemi = str(hemisphere or "").strip().upper()
+
+    if deg is None or minute_val is None or hemi not in {"N", "S", "E", "W"}:
+        return None
+
+    value = abs(deg) + (minute_val / 60.0)
+
+    if hemi in {"S", "W"}:
+        value = -value
+
+    if coord_type == "lat" and -90 <= value <= 90:
+        return round(value, 6)
+    if coord_type == "lon" and -180 <= value <= 180:
+        return round(value, 6)
+
+    return None
+
+
+def normalize_header(text):
+    return re.sub(r"[^a-z0-9가-힣]", "", str(text or "").strip().lower())
+
+
+def find_header_index(headers, candidates):
+    normalized = [normalize_header(h) for h in headers]
+    candidate_set = {normalize_header(c) for c in candidates}
+    for idx, header in enumerate(normalized):
+        if header in candidate_set:
+            return idx
+    return None
+
+
+def is_new_position_format(headers):
+    def cell(idx):
+        if idx >= len(headers):
+            return ""
+        return str(headers[idx] or "").strip().lower()
+
+    return (
+        cell(3) == "name"
+        and cell(8) == "date(lt)"
+        and cell(17) == "latitude"
+        and cell(18) == "latitude"
+        and cell(19) == "latitude"
+        and cell(20) == "longitude"
+        and cell(21) == "longitude"
+        and cell(22) == "longitude"
+    )
 
 
 def parse_single_coord(token):
@@ -306,6 +398,172 @@ def extract_position_from_row(row_dict):
         return lat_val, lon_val
 
     raise ValueError("위치 또는 위도/경도 컬럼을 찾지 못했습니다.")
+
+
+def pick_latest_position_rows(sheet):
+    rows = list(sheet.iter_rows(values_only=True))
+    if not rows:
+        return {}, 0, 0, 0
+
+    def parse_with_header_row(header_row_index):
+        if len(rows) <= header_row_index:
+            return {}, 0, 0, 0
+
+        headers = [excel_cell_str(h) for h in rows[header_row_index]]
+        data_rows = rows[header_row_index + 1:]
+
+        if not headers:
+            raise ValueError("헤더 행을 찾을 수 없습니다.")
+
+        latest_by_name = {}
+        total_rows = 0
+        invalid_count = 0
+        skipped_empty_name = 0
+
+        # 새 양식 처리
+        if is_new_position_format(headers):
+            for row in data_rows:
+                if not row:
+                    continue
+
+                raw_name = row[3] if len(row) > 3 else None
+                vessel_name = excel_cell_str(raw_name)
+
+                if not vessel_name:
+                    skipped_empty_name += 1
+                    continue
+
+                total_rows += 1
+
+                dt_value = parse_excel_datetime(row[8] if len(row) > 8 else None)
+
+                lat = parse_degree_minute_coordinate(
+                    row[17] if len(row) > 17 else None,
+                    row[18] if len(row) > 18 else None,
+                    row[19] if len(row) > 19 else None,
+                    "lat",
+                )
+
+                lon = parse_degree_minute_coordinate(
+                    row[20] if len(row) > 20 else None,
+                    row[21] if len(row) > 21 else None,
+                    row[22] if len(row) > 22 else None,
+                    "lon",
+                )
+
+                if lat is None or lon is None:
+                    invalid_count += 1
+                    continue
+
+                key = normalize_name_for_match(vessel_name)
+                item = {
+                    "name": vessel_name,
+                    "latitude": float(lat),
+                    "longitude": float(lon),
+                    "dt": dt_value,
+                }
+
+                current = latest_by_name.get(key)
+                if current is None:
+                    latest_by_name[key] = item
+                    continue
+
+                current_dt = current.get("dt")
+                if dt_value and current_dt:
+                    if dt_value >= current_dt:
+                        latest_by_name[key] = item
+                elif dt_value and not current_dt:
+                    latest_by_name[key] = item
+                elif not dt_value and not current_dt:
+                    latest_by_name[key] = item
+
+            return latest_by_name, total_rows, invalid_count, skipped_empty_name
+
+        # 구 양식 처리
+        name_idx = find_header_index(headers, [
+            "선명", "선박명", "ship name", "shipname", "vesselname", "vessel", "name"
+        ])
+        date_idx = find_header_index(headers, [
+            "date", "일자", "날짜", "시간", "datetime", "updatedate", "updatetime"
+        ])
+        lat_idx = find_header_index(headers, [
+            "latitude", "lat", "위도"
+        ])
+        lon_idx = find_header_index(headers, [
+            "longitude", "lon", "lng", "경도"
+        ])
+        position_idx = find_header_index(headers, [
+            "위치", "position", "pos", "location", "좌표"
+        ])
+
+        if name_idx is None:
+            raise ValueError("엑셀 헤더에서 선명 또는 선박명을 찾을 수 없습니다.")
+
+        if lat_idx is None and lon_idx is None and position_idx is None:
+            raise ValueError("엑셀 헤더에서 위도/경도 또는 위치 컬럼을 찾을 수 없습니다.")
+
+        for row in data_rows:
+            if not row:
+                continue
+
+            row_dict = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
+            vessel_name = excel_cell_str(row[name_idx] if name_idx < len(row) else None)
+
+            if not vessel_name:
+                skipped_empty_name += 1
+                continue
+
+            total_rows += 1
+            dt_value = None
+
+            if date_idx is not None and date_idx < len(row):
+                dt_value = parse_excel_datetime(row[date_idx])
+
+            try:
+                lat, lon = extract_position_from_row(row_dict)
+            except Exception:
+                invalid_count += 1
+                continue
+
+            if abs(lat) > 90 or abs(lon) > 180:
+                invalid_count += 1
+                continue
+
+            key = normalize_name_for_match(vessel_name)
+            item = {
+                "name": vessel_name,
+                "latitude": float(lat),
+                "longitude": float(lon),
+                "dt": dt_value,
+            }
+
+            current = latest_by_name.get(key)
+            if current is None:
+                latest_by_name[key] = item
+                continue
+
+            current_dt = current.get("dt")
+            if dt_value and current_dt:
+                if dt_value >= current_dt:
+                    latest_by_name[key] = item
+            elif dt_value and not current_dt:
+                latest_by_name[key] = item
+            elif not dt_value and not current_dt:
+                latest_by_name[key] = item
+
+        return latest_by_name, total_rows, invalid_count, skipped_empty_name
+
+    # 1순위: 2행 헤더 시도
+    try:
+        result = parse_with_header_row(1)
+        parsed_map, total_rows, invalid_count, skipped_empty_name = result
+        if parsed_map or total_rows > 0:
+            return result
+    except ValueError:
+        pass
+
+    # 2순위: 1행 헤더 시도
+    return parse_with_header_row(0)
 
 
 @app.after_request
@@ -483,26 +741,7 @@ def upload_positions():
         workbook = load_workbook(file, data_only=True)
         sheet = workbook.active
 
-        rows = list(sheet.iter_rows(values_only=True))
-        if not rows:
-            return jsonify({"success": False, "message": "엑셀 파일이 비어 있습니다."}), 400
-
-        headers = [excel_cell_str(h) for h in rows[0]]
-        if not headers:
-            return jsonify({"success": False, "message": "헤더 행을 찾을 수 없습니다."}), 400
-
-        name_candidates = ["선명", "선박명", "Vessel", "VESSEL", "vessel", "Name", "NAME", "name"]
-        name_key = None
-        for h in headers:
-            if h in name_candidates:
-                name_key = h
-                break
-
-        if not name_key:
-            return jsonify({
-                "success": False,
-                "message": "엑셀에 선명 컬럼이 필요합니다. 예: 선명 또는 선박명"
-            }), 400
+        latest_by_name, total_rows, invalid_count, skipped_empty_name = pick_latest_position_rows(sheet)
 
         vessels = load_vessels()
         vessel_map = {
@@ -510,33 +749,17 @@ def upload_positions():
             for i, v in enumerate(vessels)
         }
 
-        total_rows = 0
         updated_count = 0
         not_found_count = 0
-        invalid_count = 0
-        skipped_empty_name = 0
 
-        for row in rows[1:]:
-            row_dict = {headers[i]: row[i] for i in range(min(len(headers), len(row)))}
-            vessel_name = excel_cell_str(row_dict.get(name_key))
-
-            if not vessel_name:
-                skipped_empty_name += 1
-                continue
-
-            total_rows += 1
-            normalized_name = normalize_name_for_match(vessel_name)
-
+        for normalized_name, item in latest_by_name.items():
             target_index = vessel_map.get(normalized_name)
             if target_index is None:
                 not_found_count += 1
                 continue
 
-            try:
-                lat, lon = extract_position_from_row(row_dict)
-            except Exception:
-                invalid_count += 1
-                continue
+            lat = item["latitude"]
+            lon = item["longitude"]
 
             if abs(lat) > 90 or abs(lon) > 180:
                 invalid_count += 1
