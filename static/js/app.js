@@ -561,13 +561,13 @@ function fitToVisibleMarkers(visibleMarkers) {
 
 function handleShipClick(globalIndex) {
   if (labelMode === 'one' && activeLabelIndex === globalIndex) {
-    labelMode = 'none';
-    activeLabelIndex = null;
-  } else {
-    labelMode = 'one';
-    activeLabelIndex = globalIndex;
+    clearFormAndSelection();
+    return;
   }
 
+  labelMode = 'one';
+  activeLabelIndex = globalIndex;
+  fillFormByVessel(globalIndex);
   renderExternalLabels();
 }
 
@@ -861,11 +861,59 @@ function renderList() {
   });
 }
 
+
+
 function resetForm() {
   form.reset();
+
+  document.getElementById('fujairahConsent').value = '동의';
+  document.getElementById('yanbuConsent').value = '동의';
+  document.getElementById('consentLetter').value = '확보';
   document.getElementById('crewPlanStatus').value = '불요';
+
+  document.getElementById('vesselName').value = '';
+  document.getElementById('voyagePlan').value = '';
+  document.getElementById('crewCount').value = '';
+  document.getElementById('crewDate').value = '';
+  document.getElementById('crewPort').value = '';
+  document.getElementById('crewPlanDetail').value = '';
+  document.getElementById('bonusCount').value = '';
+  document.getElementById('bonusAmount').value = '';
+  document.getElementById('latitude').value = '';
+  document.getElementById('longitude').value = '';
+
   editIndex = null;
 }
+
+function clearFormAndSelection() {
+  resetForm();
+
+  activeLabelIndex = null;
+  labelMode = 'none';
+  uploadTargetIndex = null;
+
+  if (shipSearchInput) {
+    shipSearchInput.value = '';
+  }
+
+  if (shipSearchDropdown) {
+    shipSearchDropdown.innerHTML = '';
+    shipSearchDropdown.classList.remove('show');
+  }
+
+  if (consentFileInput) {
+    consentFileInput.value = '';
+  }
+
+  if (positionExcelInput) {
+    positionExcelInput.value = '';
+  }
+
+  renderExternalLabels();
+  updateToggleAllLabelsButton();
+}
+
+
 
 function setFilter(filterName) {
   currentFilter = filterName;
@@ -936,15 +984,19 @@ function renderSearchSuggestions(keyword) {
 
 toggleAllLabelsBtn.addEventListener('click', () => {
   if (labelMode === 'all') {
-    labelMode = 'none';
+    clearFormAndSelection();
+    return;
   } else {
     labelMode = 'all';
     activeLabelIndex = null;
+    resetForm();
   }
 
   updateToggleAllLabelsButton();
   renderExternalLabels();
 });
+
+
 
 filterAllBtn.addEventListener('click', () => setFilter('all'));
 filterCrewConfirmedBtn.addEventListener('click', () => setFilter('crewConfirmed'));
@@ -1051,7 +1103,7 @@ form.addEventListener('submit', async function (e) {
   renderSearchSuggestions(shipSearchInput.value.trim());
 });
 
-resetBtn.addEventListener('click', resetForm);
+resetBtn.addEventListener('click', clearFormAndSelection);
 
 if (reportViewBtn) {
   reportViewBtn.addEventListener('click', () => {
@@ -1087,6 +1139,8 @@ window.editVessel = function (index) {
   activeLabelIndex = index;
   renderExternalLabels();
 };
+
+
 
 window.deleteVessel = async function (index) {
   const vessel = vessels[index];
