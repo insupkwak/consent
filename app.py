@@ -1,71 +1,126 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory, abort
-import json
+from flask import Flask, render_template, request, jsonify, send_from_directory, abort, g
 import os
-import tempfile
 import re
+import sqlite3
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook
+import platform
 
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 서버환경
-DATA_DIR = "/home/opc/data/consent"
-DATA_FILE = os.path.join(DATA_DIR, "vessels.json")
-UPLOAD_DIR = os.path.join(DATA_DIR, "uploads", "consent_letters")
+
+# =========================
+# 경로 설정
+# =========================
+
+SERVER_DATA_DIR = "/home/opc/data/consent"
+SERVER_UPLOAD_DIR = os.path.join(SERVER_DATA_DIR, "uploads", "consent_letters")
+
+LOCAL_DATA_DIR = os.path.join(BASE_DIR, "data")
+LOCAL_UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "consent_letters")
+
+if platform.system() == "Windows":
+    DATA_DIR = LOCAL_DATA_DIR
+    UPLOAD_DIR = LOCAL_UPLOAD_DIR
+else:
+    DATA_DIR = SERVER_DATA_DIR
+    UPLOAD_DIR = SERVER_UPLOAD_DIR
+
+DB_PATH = os.path.join(DATA_DIR, "vessels.db")
+
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# PC 환경
-# DATA_FILE = os.path.join(BASE_DIR, "vessels.json")
-# UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "consent_letters")
-# os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
+
+# =========================
+# DB 기본
+# =========================
+def get_db():
+    if "db" not in g:
+        g.db = sqlite3.connect(DB_PATH, timeout=10)
+        g.db.row_factory = sqlite3.Row
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(exception=None):
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
+
+
+def init_db():
+    db = sqlite3.connect(DB_PATH)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS vessels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            fujairah_consent TEXT DEFAULT '동의',
+            yanbu_consent TEXT DEFAULT '동의',
+            consent_letter TEXT DEFAULT '확보',
+            voyage_plan TEXT DEFAULT '',
+            crew_plan_status TEXT DEFAULT '불요',
+            crew_count TEXT DEFAULT '',
+            crew_date TEXT DEFAULT '',
+            crew_port TEXT DEFAULT '',
+            crew_plan_detail TEXT DEFAULT '',
+            bonus_count TEXT DEFAULT '',
+            bonus_amount TEXT DEFAULT '',
+            latitude REAL,
+            longitude REAL,
+            consent_file TEXT DEFAULT ''
+        )
+    """)
+    db.commit()
+    db.close()
 
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+# =========================
+# DB <-> JSON 변환
+# =========================
+def row_to_vessel_dict(row):
+    return {
+        "name": row["name"] or "",
+        "fujairahConsent": row["fujairah_consent"] or "",
+        "yanbuConsent": row["yanbu_consent"] or "",
+        "consentLetter": row["consent_letter"] or "",
+        "voyagePlan": row["voyage_plan"] or "",
+        "crewPlanStatus": row["crew_plan_status"] or "",
+        "crewCount": row["crew_count"] or "",
+        "crewDate": row["crew_date"] or "",
+        "crewPort": row["crew_port"] or "",
+        "crewPlanDetail": row["crew_plan_detail"] or "",
+        "bonusCount": row["bonus_count"] or "",
+        "bonusAmount": row["bonus_amount"] or "",
+        "latitude": row["latitude"],
+        "longitude": row["longitude"],
+        "consentFile": row["consent_file"] or "",
+    }
+
+
 def load_vessels():
-    if not os.path.exists(DATA_FILE):
-        return []
-
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, list):
-                return data
-            return []
-    except Exception:
-        return []
+    db = get_db()
+    rows = db.execute("SELECT * FROM vessels ORDER BY name").fetchall()
+    return [row_to_vessel_dict(row) for row in rows]
 
 
-def save_vessels_atomic(vessels):
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-
-    fd, temp_path = tempfile.mkstemp(
-        dir=os.path.dirname(DATA_FILE),
-        prefix="vessels_",
-        suffix=".tmp"
-    )
-
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(vessels, f, ensure_ascii=False, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-
-        os.replace(temp_path, DATA_FILE)
-    finally:
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
+def get_vessel_by_name(name):
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM vessels WHERE LOWER(name) = LOWER(?)",
+        (name.strip(),)
+    ).fetchone()
+    return row
 
 
 def normalize_vessel_data(data, old_vessel=None):
@@ -90,13 +145,60 @@ def normalize_vessel_data(data, old_vessel=None):
     }
 
 
+def upsert_vessel(vessel):
+    db = get_db()
+    db.execute("""
+        INSERT INTO vessels (
+            name, fujairah_consent, yanbu_consent, consent_letter,
+            voyage_plan, crew_plan_status, crew_count, crew_date,
+            crew_port, crew_plan_detail, bonus_count, bonus_amount,
+            latitude, longitude, consent_file
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(name) DO UPDATE SET
+            fujairah_consent = excluded.fujairah_consent,
+            yanbu_consent = excluded.yanbu_consent,
+            consent_letter = excluded.consent_letter,
+            voyage_plan = excluded.voyage_plan,
+            crew_plan_status = excluded.crew_plan_status,
+            crew_count = excluded.crew_count,
+            crew_date = excluded.crew_date,
+            crew_port = excluded.crew_port,
+            crew_plan_detail = excluded.crew_plan_detail,
+            bonus_count = excluded.bonus_count,
+            bonus_amount = excluded.bonus_amount,
+            latitude = excluded.latitude,
+            longitude = excluded.longitude,
+            consent_file = excluded.consent_file
+    """, (
+        vessel["name"],
+        vessel["fujairahConsent"],
+        vessel["yanbuConsent"],
+        vessel["consentLetter"],
+        vessel["voyagePlan"],
+        vessel["crewPlanStatus"],
+        vessel["crewCount"],
+        vessel["crewDate"],
+        vessel["crewPort"],
+        vessel["crewPlanDetail"],
+        vessel["bonusCount"],
+        vessel["bonusAmount"],
+        vessel["latitude"],
+        vessel["longitude"],
+        vessel["consentFile"],
+    ))
+    db.commit()
+
+
+# =========================
+# 기타 유틸
+# =========================
 def get_asset_version():
     paths = [
         os.path.join(BASE_DIR, "templates", "index.html"),
         os.path.join(BASE_DIR, "templates", "report.html"),
         os.path.join(app.static_folder, "js", "app.js"),
         os.path.join(app.static_folder, "css", "style.css"),
-        DATA_FILE
+        DB_PATH
     ]
 
     mtimes = []
@@ -267,13 +369,6 @@ def is_new_position_format(headers):
 
 
 def parse_single_coord(token):
-    """
-    지원 예:
-    - W3°20'45.912"
-    - N 20° 15.13'
-    - 36.03322667
-    - E110.55
-    """
     if token is None:
         raise ValueError("좌표값이 없습니다.")
 
@@ -307,11 +402,6 @@ def parse_single_coord(token):
 
 
 def parse_combined_position(position_text):
-    """
-    지원 예:
-    1) W3º20'45.912" / 36.03322667
-    2) N 20° 15.13' E 110° 55.48'
-    """
     text = normalize_degree_text(position_text).upper()
 
     if not text:
@@ -420,7 +510,6 @@ def pick_latest_position_rows(sheet):
         invalid_count = 0
         skipped_empty_name = 0
 
-        # 새 양식 처리
         if is_new_position_format(headers):
             for row in data_rows:
                 if not row:
@@ -434,7 +523,6 @@ def pick_latest_position_rows(sheet):
                     continue
 
                 total_rows += 1
-
                 dt_value = parse_excel_datetime(row[8] if len(row) > 8 else None)
 
                 lat = parse_degree_minute_coordinate(
@@ -479,7 +567,6 @@ def pick_latest_position_rows(sheet):
 
             return latest_by_name, total_rows, invalid_count, skipped_empty_name
 
-        # 구 양식 처리
         name_idx = find_header_index(headers, [
             "선명", "선박명", "ship name", "shipname", "vesselname", "vessel", "name"
         ])
@@ -553,7 +640,6 @@ def pick_latest_position_rows(sheet):
 
         return latest_by_name, total_rows, invalid_count, skipped_empty_name
 
-    # 1순위: 2행 헤더 시도
     try:
         result = parse_with_header_row(1)
         parsed_map, total_rows, invalid_count, skipped_empty_name = result
@@ -562,10 +648,12 @@ def pick_latest_position_rows(sheet):
     except ValueError:
         pass
 
-    # 2순위: 1행 헤더 시도
     return parse_with_header_row(0)
 
 
+# =========================
+# 캐시 방지
+# =========================
 @app.after_request
 def add_no_cache_headers(response):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -575,6 +663,9 @@ def add_no_cache_headers(response):
     return response
 
 
+# =========================
+# 화면
+# =========================
 @app.route("/")
 def index():
     return render_template("index.html", version=get_asset_version())
@@ -596,9 +687,17 @@ def report():
     )
 
 
+# =========================
+# API
+# =========================
 @app.route("/api/vessels", methods=["GET"])
-def get_vessels():
-    return jsonify(load_vessels())
+def get_vessels_api():
+ 
+    db = get_db()
+    count = db.execute("SELECT COUNT(*) FROM vessels").fetchone()[0]
+    vessels = load_vessels()
+
+    return jsonify(vessels)
 
 
 @app.route("/api/vessel", methods=["POST"])
@@ -618,35 +717,35 @@ def save_single_vessel():
         except (TypeError, ValueError):
             return jsonify({"success": False, "message": "위도 또는 경도 값이 올바르지 않습니다."}), 400
 
-        vessels = load_vessels()
-
-        target_index = None
-        old_vessel = None
-
+        old_row = None
         if original_name:
-            for i, vessel in enumerate(vessels):
-                if str(vessel.get("name", "")).strip().lower() == original_name.lower():
-                    target_index = i
-                    old_vessel = vessel
-                    break
+            row = get_vessel_by_name(original_name)
+            if row:
+                old_row = row_to_vessel_dict(row)
 
-        if target_index is None:
-            for i, vessel in enumerate(vessels):
-                if str(vessel.get("name", "")).strip().lower() == vessel_name.lower():
-                    target_index = i
-                    old_vessel = vessel
-                    break
+        if old_row is None:
+            row = get_vessel_by_name(vessel_name)
+            if row:
+                old_row = row_to_vessel_dict(row)
 
-        normalized = normalize_vessel_data(data, old_vessel)
+        normalized = normalize_vessel_data(data, old_vessel=old_row)
         normalized["latitude"] = latitude
         normalized["longitude"] = longitude
 
-        if target_index is not None:
-            vessels[target_index] = normalized
-        else:
-            vessels.append(normalized)
+        db = get_db()
 
-        save_vessels_atomic(vessels)
+        if original_name and original_name.lower() != vessel_name.lower():
+            existing_original = db.execute(
+                "SELECT * FROM vessels WHERE LOWER(name)=LOWER(?)",
+                (original_name,)
+            ).fetchone()
+
+            if existing_original:
+                db.execute("DELETE FROM vessels WHERE LOWER(name)=LOWER(?)", (original_name,))
+                db.commit()
+
+        upsert_vessel(normalized)
+
         return jsonify({"success": True, "message": "저장 완료"})
     except Exception as e:
         return jsonify({"success": False, "message": f"저장 중 오류: {str(e)}"}), 500
@@ -655,18 +754,16 @@ def save_single_vessel():
 @app.route("/api/vessel/<path:vessel_name>", methods=["DELETE"])
 def delete_single_vessel(vessel_name):
     try:
-        target_name = vessel_name.strip().lower()
-        vessels = load_vessels()
+        db = get_db()
+        cur = db.execute(
+            "DELETE FROM vessels WHERE LOWER(name) = LOWER(?)",
+            (vessel_name.strip(),)
+        )
+        db.commit()
 
-        new_vessels = [
-            vessel for vessel in vessels
-            if str(vessel.get("name", "")).strip().lower() != target_name
-        ]
-
-        if len(new_vessels) == len(vessels):
+        if cur.rowcount == 0:
             return jsonify({"success": False, "message": "삭제할 선박을 찾지 못했습니다."}), 404
 
-        save_vessels_atomic(new_vessels)
         return jsonify({"success": True, "message": "삭제 완료"})
     except Exception as e:
         return jsonify({"success": False, "message": f"삭제 중 오류: {str(e)}"}), 500
@@ -687,15 +784,8 @@ def upload_consent():
         if not allowed_file(file.filename):
             return jsonify({"success": False, "message": "허용되지 않는 파일 형식입니다."}), 400
 
-        vessels = load_vessels()
-
-        target_index = None
-        for i, vessel in enumerate(vessels):
-            if str(vessel.get("name", "")).strip().lower() == vessel_name.lower():
-                target_index = i
-                break
-
-        if target_index is None:
+        row = get_vessel_by_name(vessel_name)
+        if row is None:
             return jsonify({"success": False, "message": "해당 선박을 찾을 수 없습니다."}), 404
 
         ext = file.filename.rsplit(".", 1)[1].lower()
@@ -703,7 +793,7 @@ def upload_consent():
         new_filename = f"{safe_name}.{ext}"
         save_path = os.path.join(UPLOAD_DIR, new_filename)
 
-        old_filename = str(vessels[target_index].get("consentFile", "")).strip()
+        old_filename = str(row["consent_file"] or "").strip()
         if old_filename:
             old_path = os.path.join(UPLOAD_DIR, old_filename)
             if os.path.exists(old_path) and old_filename != new_filename:
@@ -714,8 +804,12 @@ def upload_consent():
 
         file.save(save_path)
 
-        vessels[target_index]["consentFile"] = new_filename
-        save_vessels_atomic(vessels)
+        db = get_db()
+        db.execute(
+            "UPDATE vessels SET consent_file = ? WHERE LOWER(name) = LOWER(?)",
+            (new_filename, vessel_name)
+        )
+        db.commit()
 
         return jsonify({
             "success": True,
@@ -743,18 +837,16 @@ def upload_positions():
 
         latest_by_name, total_rows, invalid_count, skipped_empty_name = pick_latest_position_rows(sheet)
 
-        vessels = load_vessels()
-        vessel_map = {
-            normalize_name_for_match(v.get("name", "")): i
-            for i, v in enumerate(vessels)
-        }
+        db = get_db()
+        rows = db.execute("SELECT name FROM vessels").fetchall()
+        vessel_names = {normalize_name_for_match(r["name"]): r["name"] for r in rows}
 
         updated_count = 0
         not_found_count = 0
 
         for normalized_name, item in latest_by_name.items():
-            target_index = vessel_map.get(normalized_name)
-            if target_index is None:
+            real_name = vessel_names.get(normalized_name)
+            if real_name is None:
                 not_found_count += 1
                 continue
 
@@ -765,11 +857,13 @@ def upload_positions():
                 invalid_count += 1
                 continue
 
-            vessels[target_index]["latitude"] = float(lat)
-            vessels[target_index]["longitude"] = float(lon)
+            db.execute(
+                "UPDATE vessels SET latitude = ?, longitude = ? WHERE name = ?",
+                (float(lat), float(lon), real_name)
+            )
             updated_count += 1
 
-        save_vessels_atomic(vessels)
+        db.commit()
 
         return jsonify({
             "success": True,
@@ -797,6 +891,11 @@ def uploaded_consent_file(filename):
     response.headers["Expires"] = "0"
     return response
 
+
+# =========================
+# 시작
+# =========================
+init_db()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
