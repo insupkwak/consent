@@ -153,8 +153,28 @@
     </main>
   </div>
 
+
+
+  
   <input type="file" id="consentFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp" hidden />
   <input type="file" id="positionExcelInput" accept=".xlsx" hidden />
+
+
+  <div id="positionResultModal" class="position-result-modal" hidden>
+    <div class="position-result-backdrop"></div>
+    <div class="position-result-box">
+      <div class="position-result-header">
+        <h3>위치 업데이트 결과</h3>
+        <button type="button" id="closePositionResultBtn" class="position-result-close">확인</button>
+      </div>
+
+      <div id="positionResultSummary" class="position-result-summary"></div>
+
+      <div class="position-result-title">업데이트 실패 선박 List</div>
+      <div id="positionResultFailedList" class="position-result-list"></div>
+    </div>
+  </div>
+
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="{{ url_for('static', filename='js/app.js', v=version) }}"></script>

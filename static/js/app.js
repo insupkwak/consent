@@ -64,6 +64,44 @@ const shipSvg = (color) => `
   </div>
 `;
 
+
+const positionResultModal = document.getElementById('positionResultModal');
+const closePositionResultBtn = document.getElementById('closePositionResultBtn');
+const positionResultSummary = document.getElementById('positionResultSummary');
+const positionResultFailedList = document.getElementById('positionResultFailedList');
+
+function openPositionResultModal(successCount, failedList) {
+  const failedCount = failedList.length;
+
+  positionResultSummary.textContent =
+    `업데이트 완료 : ${successCount}척\n업데이트 실패 : ${failedCount}척`;
+
+  if (failedCount === 0) {
+    positionResultFailedList.textContent = '없음';
+  } else {
+    positionResultFailedList.innerHTML = failedList
+      .map(name => `<div class="position-result-list-item">${escapeHtml(name.replace(/^\s*-\s*/, ''))}</div>`)
+      .join('');
+  }
+
+  positionResultModal.hidden = false;
+}
+
+function closePositionResultModal() {
+  positionResultModal.hidden = true;
+}
+
+if (closePositionResultBtn) {
+  closePositionResultBtn.addEventListener('click', closePositionResultModal);
+}
+
+if (positionResultModal) {
+  const backdrop = positionResultModal.querySelector('.position-result-backdrop');
+  if (backdrop) {
+    backdrop.addEventListener('click', closePositionResultModal);
+  }
+}
+
 function shipNameHtml(name) {
   return `<div class="ship-name-text">${escapeHtml(name)}</div>`;
 }
@@ -501,6 +539,9 @@ async function uploadConsentFile(index, file) {
 }
 
 
+
+
+
 async function uploadPositionExcel(file) {
   const formData = new FormData();
   formData.append('file', file);
@@ -530,16 +571,7 @@ async function uploadPositionExcel(file) {
     const failedList = result.notUpdatedVessels || [];
     const failedCount = failedList.length;
 
-    let message = '';
-    message += `업데이트 완료 : ${successCount}척\n`;
-    message += `업데이트 실패 : ${failedCount}척\n`;
-
-    if (failedCount > 0) {
-      message += `\n업데이트 실패 선박 List\n`;
-      message += `- ${failedList.join('\n- ')}`;
-    }
-
-    alert(message);
+    openPositionResultModal(successCount, failedList);
 
   } catch (error) {
     console.error('위치 업데이트 실패:', error);

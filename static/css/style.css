@@ -834,3 +834,108 @@ button:hover {
 #vesselForm button + button {
   margin-top: 10px;
 }
+
+
+.position-result-modal[hidden] {
+  display: none !important;
+}
+
+.position-result-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+}
+
+.position-result-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.position-result-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  background: #16181d;
+  color: #f8fafc;
+  border: 1px solid #3f3f46;
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.position-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.position-result-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.position-result-close {
+  width: auto;
+  min-width: 110px;
+  margin-top: 0;
+  padding: 12px 20px;
+  border-radius: 18px;
+  background: #94a3b8;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.position-result-close:hover {
+  background: #cbd5e1;
+}
+
+.position-result-summary {
+  background: #1f2937;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 18px 20px;
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 18px;
+  white-space: pre-line;
+}
+
+.position-result-title {
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 10px;
+  color: #f8fafc;
+}
+
+.position-result-list {
+  border: 1px solid #334155;
+  border-radius: 16px;
+  background: #0b1736;
+  padding: 18px;
+  min-height: 90px;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-line;
+  line-height: 1.7;
+  font-size: 15px;
+}
+
+.position-result-list-item {
+  margin: 0 0 4px 0;
+}
+
+.position-result-list-item:last-child {
+  margin-bottom: 0;
+}
