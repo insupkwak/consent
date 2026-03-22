@@ -500,6 +500,7 @@ async function uploadConsentFile(index, file) {
   }
 }
 
+
 async function uploadPositionExcel(file) {
   const formData = new FormData();
   formData.append('file', file);
@@ -525,13 +526,21 @@ async function uploadPositionExcel(file) {
     await loadData({ preserveSelection: true, fitBounds: false });
     renderSearchSuggestions(shipSearchInput.value.trim());
 
-    alert(
-      `위치 업데이트 완료\n` +
-      `- 전체 행: ${result.totalRows}건\n` +
-      `- 업데이트: ${result.updatedCount}척\n` +
-      `- 미일치: ${result.notFoundCount}척\n` +
-      `- 좌표오류: ${result.invalidCount}건`
-    );
+    const successCount = result.updatedCount || 0;
+    const failedList = result.notUpdatedVessels || [];
+    const failedCount = failedList.length;
+
+    let message = '';
+    message += `업데이트 완료 : ${successCount}척\n`;
+    message += `업데이트 실패 : ${failedCount}척\n`;
+
+    if (failedCount > 0) {
+      message += `\n업데이트 실패 선박 List\n`;
+      message += `- ${failedList.join('\n- ')}`;
+    }
+
+    alert(message);
+
   } catch (error) {
     console.error('위치 업데이트 실패:', error);
     alert('위치 업데이트 중 오류가 발생했습니다.');

@@ -820,7 +820,6 @@ def upload_consent():
     except Exception as e:
         return jsonify({"success": False, "message": f"업로드 중 오류: {str(e)}"}), 500
 
-
 @app.route("/api/upload-positions", methods=["POST"])
 def upload_positions():
     try:
@@ -839,22 +838,26 @@ def upload_positions():
 
         db = get_db()
         rows = db.execute("SELECT name FROM vessels").fetchall()
-        vessel_names = {normalize_name_for_match(r["name"]): r["name"] for r in rows}
+
+        db_name_map = {normalize_name_for_match(r["name"]): r["name"] for r in rows}
+        db_name_set = set(db_name_map.keys())
 
         updated_count = 0
-        not_found_count = 0
+        success_name_set = set()
+        failed_name_set = set()
 
         for normalized_name, item in latest_by_name.items():
-            real_name = vessel_names.get(normalized_name)
-            if real_name is None:
-                not_found_count += 1
+            # DB에 없는 선박은 완전히 무시
+            if normalized_name not in db_name_set:
                 continue
 
+            real_name = db_name_map[normalized_name]
             lat = item["latitude"]
             lon = item["longitude"]
 
-            if abs(lat) > 90 or abs(lon) > 180:
-                invalid_count += 1
+            # DB에는 있지만 좌표가 비정상이면 실패 처리
+            if lat is None or lon is None or abs(lat) > 90 or abs(lon) > 180:
+                failed_name_set.add(real_name)
                 continue
 
             db.execute(
@@ -862,17 +865,23 @@ def upload_positions():
                 (float(lat), float(lon), real_name)
             )
             updated_count += 1
+            success_name_set.add(real_name)
 
         db.commit()
+
+        not_updated_vessels = sorted([
+            real_name for real_name in db_name_map.values()
+            if real_name not in success_name_set
+        ])
+
+        failed_vessels = sorted(list(failed_name_set))
 
         return jsonify({
             "success": True,
             "message": "위치 업데이트 완료",
-            "totalRows": total_rows,
             "updatedCount": updated_count,
-            "notFoundCount": not_found_count,
-            "invalidCount": invalid_count,
-            "skippedEmptyName": skipped_empty_name
+            "failedVessels": failed_vessels,
+            "notUpdatedVessels": not_updated_vessels
         })
 
     except Exception as e:
