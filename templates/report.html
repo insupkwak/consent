@@ -53,6 +53,7 @@
           <tr>
             <th>No</th>
             <th>선박명</th>
+            <th>관리사</th>
             <th>푸자이라항 동의 여부</th>
             <th>얀부항 동의 여부</th>
             <th>동의서 확보 상태</th>
@@ -69,6 +70,7 @@
           <tr>
             <td>{{ loop.index }}</td>
             <td class="left strong">{{ row.name }}</td>
+             <td class="left">{{ row.managementCompany }}</td>
             <td>
               <span class="report-badge
                 {% if row.fujairahConsent == '동의' %}good

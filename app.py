@@ -61,6 +61,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS vessels (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
+            management_company TEXT DEFAULT '',
             fujairah_consent TEXT DEFAULT '동의',
             yanbu_consent TEXT DEFAULT '동의',
             consent_letter TEXT DEFAULT '확보',
@@ -77,9 +78,13 @@ def init_db():
             consent_file TEXT DEFAULT ''
         )
     """)
+
+    columns = [row[1] for row in db.execute("PRAGMA table_info(vessels)").fetchall()]
+    if "management_company" not in columns:
+        db.execute("ALTER TABLE vessels ADD COLUMN management_company TEXT DEFAULT ''")
+
     db.commit()
     db.close()
-
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -91,6 +96,7 @@ def allowed_file(filename):
 def row_to_vessel_dict(row):
     return {
         "name": row["name"] or "",
+        "managementCompany": row["management_company"] or "",
         "fujairahConsent": row["fujairah_consent"] or "",
         "yanbuConsent": row["yanbu_consent"] or "",
         "consentLetter": row["consent_letter"] or "",
@@ -106,7 +112,6 @@ def row_to_vessel_dict(row):
         "longitude": row["longitude"],
         "consentFile": row["consent_file"] or "",
     }
-
 
 def load_vessels():
     db = get_db()
@@ -128,6 +133,7 @@ def normalize_vessel_data(data, old_vessel=None):
 
     return {
         "name": str(data.get("name", "")).strip(),
+        "managementCompany": str(data.get("managementCompany", old_vessel.get("managementCompany", ""))).strip(),
         "fujairahConsent": str(data.get("fujairahConsent", old_vessel.get("fujairahConsent", "동의"))).strip(),
         "yanbuConsent": str(data.get("yanbuConsent", old_vessel.get("yanbuConsent", "동의"))).strip(),
         "consentLetter": str(data.get("consentLetter", old_vessel.get("consentLetter", "확보"))).strip(),
@@ -144,17 +150,17 @@ def normalize_vessel_data(data, old_vessel=None):
         "consentFile": old_vessel.get("consentFile", "")
     }
 
-
 def upsert_vessel(vessel):
     db = get_db()
     db.execute("""
         INSERT INTO vessels (
-            name, fujairah_consent, yanbu_consent, consent_letter,
+            name, management_company, fujairah_consent, yanbu_consent, consent_letter,
             voyage_plan, crew_plan_status, crew_count, crew_date,
             crew_port, crew_plan_detail, bonus_count, bonus_amount,
             latitude, longitude, consent_file
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
+            management_company = excluded.management_company,
             fujairah_consent = excluded.fujairah_consent,
             yanbu_consent = excluded.yanbu_consent,
             consent_letter = excluded.consent_letter,
@@ -171,6 +177,7 @@ def upsert_vessel(vessel):
             consent_file = excluded.consent_file
     """, (
         vessel["name"],
+        vessel["managementCompany"],
         vessel["fujairahConsent"],
         vessel["yanbuConsent"],
         vessel["consentLetter"],
@@ -187,7 +194,6 @@ def upsert_vessel(vessel):
         vessel["consentFile"],
     ))
     db.commit()
-
 
 # =========================
 # 기타 유틸
@@ -219,6 +225,7 @@ def build_report_rows(vessels):
     for vessel in vessels:
         rows.append({
             "name": normalize_report_value(vessel.get("name")),
+            "managementCompany": normalize_report_value(vessel.get("managementCompany")),
             "fujairahConsent": normalize_report_value(vessel.get("fujairahConsent")),
             "yanbuConsent": normalize_report_value(vessel.get("yanbuConsent")),
             "consentLetter": normalize_report_value(vessel.get("consentLetter")),

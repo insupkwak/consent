@@ -291,6 +291,7 @@ function makeLabelHtml(vessel, index) {
   return `
     <div class="map-label ${cls}" data-index="${index}">
       <div class="title">${escapeHtml(vessel.name)}</div>
+      ${makeOptionalLine('관리사', vessel.managementCompany)}
       <div class="line"><span class="label-name">푸자이라:</span> ${highlightValue(vessel.fujairahConsent)}</div>
       <div class="line"><span class="label-name">얀부:</span> ${highlightValue(vessel.yanbuConsent)}</div>
       <div class="line"><span class="label-name">동의서:</span> ${highlightValue(vessel.consentLetter)}</div>
@@ -879,6 +880,7 @@ function renderList() {
     item.className = 'vessel-item';
     item.innerHTML = `
       <strong>${escapeHtml(vessel.name)}</strong>
+      ${hasText(vessel.managementCompany) ? `<small>관리사: ${escapeHtml(vessel.managementCompany)}</small>` : ''}
       <small>푸자이라항: ${highlightListValue(vessel.fujairahConsent)}</small>
       <small>얀부항: ${highlightListValue(vessel.yanbuConsent)}</small>
       <small>동의서: ${highlightListValue(vessel.consentLetter)}</small>
@@ -913,6 +915,7 @@ function resetForm() {
   document.getElementById('crewPlanStatus').value = '불요';
 
   document.getElementById('vesselName').value = '';
+  document.getElementById('managementCompany').value = '';
   document.getElementById('voyagePlan').value = '';
   document.getElementById('crewCount').value = '';
   document.getElementById('crewDate').value = '';
@@ -1105,6 +1108,7 @@ form.addEventListener('submit', async function (e) {
 
   const vessel = {
     name: document.getElementById('vesselName').value.trim(),
+    managementCompany: document.getElementById('managementCompany').value.trim(),
     fujairahConsent: document.getElementById('fujairahConsent').value,
     yanbuConsent: document.getElementById('yanbuConsent').value,
     consentLetter: document.getElementById('consentLetter').value,
@@ -1157,6 +1161,7 @@ function fillFormByVessel(index) {
   if (!vessel) return;
 
   document.getElementById('vesselName').value = vessel.name || '';
+  document.getElementById('managementCompany').value = vessel.managementCompany || '';
   document.getElementById('fujairahConsent').value = vessel.fujairahConsent || '동의';
   document.getElementById('yanbuConsent').value = vessel.yanbuConsent || '동의';
   document.getElementById('consentLetter').value = vessel.consentLetter || '확보';
