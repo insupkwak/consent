@@ -26,75 +26,120 @@
             <button type="button" id="reportViewBtn" class="report-view-btn">Report 보기</button>
           </div>
         </div>
+<form id="vesselForm">
+  <div class="form-row">
+    <label for="vesselName">선박명</label>
+    <input type="text" id="vesselName" placeholder="예: RIO DE JANEIRO ENERGY" required />
+  </div>
 
-        <form id="vesselForm">
-          <label for="vesselName">선박명</label>
-          <input type="text" id="vesselName" placeholder="예: RIO DE JANEIRO ENERGY" required />
+  <div class="form-row">
+    <label for="managementCompany">관리사</label>
+    <input type="text" id="managementCompany" placeholder="예: CMT2, OSM, Anglo Eastern" />
+  </div>
 
-          <label for="managementCompany">관리사</label>
-          <input type="text" id="managementCompany" placeholder="예: CMT2, OSM, Anglo Eastern" />
+  <div class="form-row" id="row-category">
+    <label for="category">분류</label>
+    <select id="category">
+      <option value="AG 내">AG 내</option>
+      <option value="얀부, 푸자이라">얀부, 푸자이라</option>
+      <option value="그외 지역">그외 지역</option>
+    </select>
+  </div>
 
-          <label for="fujairahConsent">푸자이라항 동의 여부</label>
-          <select id="fujairahConsent">
-            <option value="동의">동의</option>
-            <option value="미동의">미동의</option>
-            <option value="확인중">확인중</option>
-            <option value="불요">불요</option>
-          </select>
+  <div class="form-row" id="row-fujairahConsent">
+    <label for="fujairahConsent">푸자이라항 동의 여부</label>
+    <select id="fujairahConsent">
+      <option value="동의">동의</option>
+      <option value="미동의">미동의</option>
+      <option value="확인중">확인중</option>
+      <option value="불요">불요</option>
+    </select>
+  </div>
 
-          <label for="yanbuConsent">얀부항 동의 여부</label>
-          <select id="yanbuConsent">
-            <option value="동의">동의</option>
-            <option value="미동의">미동의</option>
-            <option value="확인중">확인중</option>
-            <option value="불요">불요</option>
-          </select>
+  <div class="form-row" id="row-yanbuConsent">
+    <label for="yanbuConsent">얀부항 동의 여부</label>
+    <select id="yanbuConsent">
+      <option value="동의">동의</option>
+      <option value="미동의">미동의</option>
+      <option value="확인중">확인중</option>
+      <option value="불요">불요</option>
+    </select>
+  </div>
 
-          <label for="consentLetter">동의서 확보 상태</label>
-          <select id="consentLetter">
-            <option value="확보">확보</option>
-            <option value="미확보">미확보</option>
-            <option value="진행중">진행중</option>
-          </select>
+  <div class="form-row" id="row-consentLetter">
+    <label for="consentLetter">동의서 확보 상태</label>
+    <select id="consentLetter">
+      <option value="확보">확보</option>
+      <option value="미확보">미확보</option>
+      <option value="진행중">진행중</option>
+    </select>
+  </div>
 
-          <label for="voyagePlan">항차계획</label>
-          <input type="text" id="voyagePlan" placeholder="예: Yanbu 예정, Fujairah 검토중" />
+  <div class="form-row" id="row-voyagePlan">
+    <label for="voyagePlan">항차계획</label>
+    <input type="text" id="voyagePlan" placeholder="예: Yanbu 예정, Fujairah 검토중" />
+  </div>
 
-          <label for="crewPlanStatus">선원교대 계획</label>
-          <select id="crewPlanStatus">
-            <option value="불요">불요</option>
-            <option value="확정">확정</option>
-            <option value="미정">미정</option>
-          </select>
 
-          <label for="crewCount">선원교대 인원</label>
-          <input type="number" id="crewCount" min="0" placeholder="예: 5" />
+<div class="form-row" id="row-agSupplyPlan">
+  <label for="agSupplyPlan">윤활유 보급계획 등</label>
+  <input type="text" id="agSupplyPlan" placeholder="예: AG 내 보급 예정, Exxon 확인중" />
+</div>
+  
 
-          <label for="crewDate">선원교대 날짜</label>
-          <input type="text" id="crewDate" placeholder="예: 3/15, 2026-03-15, 미정" />
+  <div class="form-row" id="row-crewPlanStatus">
+    <label for="crewPlanStatus">선원교대 계획</label>
+    <select id="crewPlanStatus">
+      <option value="불요">불요</option>
+      <option value="확정">확정</option>
+      <option value="미정">미정</option>
+    </select>
+  </div>
 
-          <label for="crewPort">선원교대 항구</label>
-          <input type="text" id="crewPort" placeholder="예: 싱가폴, 두바이, 수에즈" />
+  <div class="form-row" id="row-crewCount">
+    <label for="crewCount">선원교대 인원</label>
+    <input type="number" id="crewCount" min="0" placeholder="예: 5" />
+  </div>
 
-          <label for="crewPlanDetail">선원교대 상세</label>
-          <input type="text" id="crewPlanDetail" placeholder="예: 3월 15일 교대 예정, 검토중" />
+  <div class="form-row" id="row-crewDate">
+    <label for="crewDate">선원교대 날짜</label>
+    <input type="text" id="crewDate" placeholder="예: 3/15, 2026-03-15, 미정" />
+  </div>
 
-          <label for="bonusCount">보너스 횟수</label>
-          <input type="number" id="bonusCount" min="0" placeholder="예: 2" />
+  <div class="form-row" id="row-crewPort">
+    <label for="crewPort">선원교대 항구</label>
+    <input type="text" id="crewPort" placeholder="예: 싱가폴, 두바이, 수에즈" />
+  </div>
 
-          <label for="bonusAmount">보너스 총액 ($)</label>
-          <input type="number" id="bonusAmount" min="0" step="any" placeholder="예: 15000" />
+  <div class="form-row" id="row-crewPlanDetail">
+    <label for="crewPlanDetail">선원교대 상세</label>
+    <input type="text" id="crewPlanDetail" placeholder="예: 3월 15일 교대 예정, 검토중" />
+  </div>
 
-          <label for="latitude">위도</label>
-          <input type="number" id="latitude" step="any" placeholder="예: 25.1122" required />
+  <div class="form-row" id="row-bonusCount">
+    <label for="bonusCount">보너스 횟수</label>
+    <input type="number" id="bonusCount" min="0" placeholder="예: 2" />
+  </div>
 
-          <label for="longitude">경도</label>
-          <input type="number" id="longitude" step="any" placeholder="예: 56.3361" required />
+  <div class="form-row" id="row-bonusAmount">
+    <label for="bonusAmount">보너스 총액 ($)</label>
+    <input type="number" id="bonusAmount" min="0" step="any" placeholder="예: 15000" />
+  </div>
 
-          <button type="submit">선박 추가 / 저장</button>
-          <button type="button" class="btn-secondary" id="resetBtn">입력 초기화</button>
-          <button type="button" class="btn-secondary" id="positionUpdateBtn">위치 업데이트</button>
-        </form>
+  <div class="form-row">
+    <label for="latitude">위도</label>
+    <input type="number" id="latitude" step="any" placeholder="예: 25.1122" required />
+  </div>
+
+  <div class="form-row">
+    <label for="longitude">경도</label>
+    <input type="number" id="longitude" step="any" placeholder="예: 56.3361" required />
+  </div>
+
+  <button type="submit">선박 추가 / 저장</button>
+  <button type="button" class="btn-secondary" id="resetBtn">입력 초기화</button>
+  <button type="button" class="btn-secondary" id="positionUpdateBtn">위치 업데이트</button>
+</form>
 
 
       </div>
@@ -112,45 +157,49 @@
           <div id="shipSearchDropdown" class="search-dropdown"></div>
         </div>
 
-        <button type="button" id="toggleAllLabelsBtn" class="toolbar-chip toolbar-chip-btn">
-          <span class="toolbar-chip-label">전체보기</span>
-          <span class="toolbar-chip-value">ON/OFF</span>
-        </button>
+<button type="button" id="toggleAllLabelsBtn" class="toolbar-chip toolbar-chip-btn">
+  <span class="toolbar-chip-label">전체보기</span>
+</button>
 
-        <button type="button" id="filterAllBtn" class="toolbar-chip toolbar-chip-btn active">
-          <span class="toolbar-chip-label">전체선박</span>
-          <span class="toolbar-chip-value" id="countAll">0척</span>
-        </button>
+     <button type="button" id="filterAllBtn" class="toolbar-chip toolbar-chip-btn active">
+  <span class="toolbar-chip-label">전체</span>
+  <span class="toolbar-chip-value" id="countAll">0척</span>
+</button>
 
-        <button type="button" id="filterCrewConfirmedBtn" class="toolbar-chip toolbar-chip-btn">
-          <span class="toolbar-chip-label">선원교대확정</span>
-          <span class="toolbar-chip-value" id="countCrewConfirmed">0척</span>
-        </button>
+<button type="button" id="filterAgBtn" class="toolbar-chip toolbar-chip-btn">
+  <span class="toolbar-chip-label">AG 내</span>
+  <span class="toolbar-chip-value" id="countAg">0척</span>
+</button>
 
-        <button type="button" id="filterCrewPendingBtn" class="toolbar-chip toolbar-chip-btn">
-          <span class="toolbar-chip-label">선원교대미정</span>
-          <span class="toolbar-chip-value" id="countCrewPending">0척</span>
-        </button>
+<button type="button" id="filterBothAreaBtn" class="toolbar-chip toolbar-chip-btn">
+  <span class="toolbar-chip-label">얀부, 푸자이라</span>
+  <span class="toolbar-chip-value" id="countBothArea">0척</span>
+</button>
 
-        <button type="button" id="filterNoConsentBtn" class="toolbar-chip toolbar-chip-btn">
-          <span class="toolbar-chip-label">동의서 미확보</span>
-          <span class="toolbar-chip-value" id="countNoConsent">0척</span>
-        </button>
+<button type="button" id="filterOtherBtn" class="toolbar-chip toolbar-chip-btn">
+  <span class="toolbar-chip-label">그외 지역</span>
+  <span class="toolbar-chip-value" id="countOther">0척</span>
+</button>
 
-        <button type="button" id="filterFujairahBtn" class="toolbar-chip toolbar-chip-btn">
-          <span class="toolbar-chip-label">푸자이라 가능</span>
-          <span class="toolbar-chip-value" id="countFujairah">0척</span>
-        </button>
+<button type="button" id="filterFujairahBtn" class="toolbar-chip toolbar-chip-btn">
+  <span class="toolbar-chip-label">푸자이라 동의</span>
+  <span class="toolbar-chip-value" id="countFujairah">0척</span>
+</button>
 
-        <button type="button" id="filterYanbuBtn" class="toolbar-chip toolbar-chip-btn">
-          <span class="toolbar-chip-label">얀부 가능</span>
-          <span class="toolbar-chip-value" id="countYanbu">0척</span>
-        </button>
+<button type="button" id="filterYanbuBtn" class="toolbar-chip toolbar-chip-btn">
+  <span class="toolbar-chip-label">얀부 동의</span>
+  <span class="toolbar-chip-value" id="countYanbu">0척</span>
+</button>
 
-        <button type="button" id="filterBothBtn" class="toolbar-chip toolbar-chip-btn">
-          <span class="toolbar-chip-label">모두가능</span>
-          <span class="toolbar-chip-value" id="countBoth">0척</span>
-        </button>
+<button type="button" id="filterCrewConfirmedBtn" class="toolbar-chip toolbar-chip-btn">
+  <span class="toolbar-chip-label">선원교대 확정</span>
+  <span class="toolbar-chip-value" id="countCrewConfirmed">0척</span>
+</button>
+
+<button type="button" id="filterCrewPendingBtn" class="toolbar-chip toolbar-chip-btn">
+  <span class="toolbar-chip-label">선원교대 미정</span>
+  <span class="toolbar-chip-value" id="countCrewPending">0척</span>
+</button>
       </div>
 
       <div id="map"></div>

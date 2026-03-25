@@ -62,6 +62,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
             management_company TEXT DEFAULT '',
+            category TEXT DEFAULT 'AG 내',
             fujairah_consent TEXT DEFAULT '동의',
             yanbu_consent TEXT DEFAULT '동의',
             consent_letter TEXT DEFAULT '확보',
@@ -80,8 +81,15 @@ def init_db():
     """)
 
     columns = [row[1] for row in db.execute("PRAGMA table_info(vessels)").fetchall()]
+
     if "management_company" not in columns:
         db.execute("ALTER TABLE vessels ADD COLUMN management_company TEXT DEFAULT ''")
+
+    if "category" not in columns:
+        db.execute("ALTER TABLE vessels ADD COLUMN category TEXT DEFAULT 'AG 내'")
+
+    if "ag_supply_plan" not in columns:
+        db.execute("ALTER TABLE vessels ADD COLUMN ag_supply_plan TEXT DEFAULT ''")
 
     db.commit()
     db.close()
@@ -97,10 +105,12 @@ def row_to_vessel_dict(row):
     return {
         "name": row["name"] or "",
         "managementCompany": row["management_company"] or "",
+        "category": row["category"] or "AG 내",
         "fujairahConsent": row["fujairah_consent"] or "",
         "yanbuConsent": row["yanbu_consent"] or "",
         "consentLetter": row["consent_letter"] or "",
         "voyagePlan": row["voyage_plan"] or "",
+        "agSupplyPlan": row["ag_supply_plan"] or "",
         "crewPlanStatus": row["crew_plan_status"] or "",
         "crewCount": row["crew_count"] or "",
         "crewDate": row["crew_date"] or "",
@@ -134,10 +144,12 @@ def normalize_vessel_data(data, old_vessel=None):
     return {
         "name": str(data.get("name", "")).strip(),
         "managementCompany": str(data.get("managementCompany", old_vessel.get("managementCompany", ""))).strip(),
+        "category": str(data.get("category", old_vessel.get("category", "AG 내"))).strip() or "AG 내",
         "fujairahConsent": str(data.get("fujairahConsent", old_vessel.get("fujairahConsent", "동의"))).strip(),
         "yanbuConsent": str(data.get("yanbuConsent", old_vessel.get("yanbuConsent", "동의"))).strip(),
         "consentLetter": str(data.get("consentLetter", old_vessel.get("consentLetter", "확보"))).strip(),
         "voyagePlan": str(data.get("voyagePlan", old_vessel.get("voyagePlan", ""))).strip(),
+        "agSupplyPlan": str(data.get("agSupplyPlan", old_vessel.get("agSupplyPlan", ""))).strip(),
         "crewPlanStatus": str(data.get("crewPlanStatus", old_vessel.get("crewPlanStatus", "불요"))).strip(),
         "crewCount": str(data.get("crewCount", old_vessel.get("crewCount", ""))).strip(),
         "crewDate": str(data.get("crewDate", old_vessel.get("crewDate", ""))).strip(),
@@ -154,17 +166,19 @@ def upsert_vessel(vessel):
     db = get_db()
     db.execute("""
         INSERT INTO vessels (
-            name, management_company, fujairah_consent, yanbu_consent, consent_letter,
-            voyage_plan, crew_plan_status, crew_count, crew_date,
+            name, management_company, category, fujairah_consent, yanbu_consent, consent_letter,
+            voyage_plan, ag_supply_plan, crew_plan_status, crew_count, crew_date,
             crew_port, crew_plan_detail, bonus_count, bonus_amount,
             latitude, longitude, consent_file
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
             management_company = excluded.management_company,
+            category = excluded.category,
             fujairah_consent = excluded.fujairah_consent,
             yanbu_consent = excluded.yanbu_consent,
             consent_letter = excluded.consent_letter,
             voyage_plan = excluded.voyage_plan,
+            ag_supply_plan = excluded.ag_supply_plan,
             crew_plan_status = excluded.crew_plan_status,
             crew_count = excluded.crew_count,
             crew_date = excluded.crew_date,
@@ -178,10 +192,12 @@ def upsert_vessel(vessel):
     """, (
         vessel["name"],
         vessel["managementCompany"],
+        vessel["category"],
         vessel["fujairahConsent"],
         vessel["yanbuConsent"],
         vessel["consentLetter"],
         vessel["voyagePlan"],
+        vessel["agSupplyPlan"],
         vessel["crewPlanStatus"],
         vessel["crewCount"],
         vessel["crewDate"],
@@ -220,16 +236,44 @@ def normalize_report_value(value, default="-"):
     return text if text else default
 
 
+def filter_vessels_for_report(vessels, filter_name):
+    filter_name = (filter_name or "all").strip()
+
+    if filter_name == "ag":
+        return [v for v in vessels if (v.get("category") or "AG 내") == "AG 내"]
+
+    if filter_name == "bothArea":
+        return [v for v in vessels if (v.get("category") or "AG 내") == "얀부, 푸자이라"]
+
+    if filter_name == "other":
+        return [v for v in vessels if (v.get("category") or "AG 내") == "그외 지역"]
+
+    if filter_name == "fujairah":
+        return [v for v in vessels if (v.get("fujairahConsent") or "").strip() == "동의"]
+
+    if filter_name == "yanbu":
+        return [v for v in vessels if (v.get("yanbuConsent") or "").strip() == "동의"]
+
+    if filter_name == "crewConfirmed":
+        return [v for v in vessels if (v.get("crewPlanStatus") or "").strip() == "확정"]
+
+    if filter_name == "crewPending":
+        return [v for v in vessels if (v.get("crewPlanStatus") or "").strip() == "미정"]
+
+    return vessels
+
 def build_report_rows(vessels):
     rows = []
     for vessel in vessels:
         rows.append({
             "name": normalize_report_value(vessel.get("name")),
             "managementCompany": normalize_report_value(vessel.get("managementCompany")),
+            "category": normalize_report_value(vessel.get("category"), "AG 내"),
             "fujairahConsent": normalize_report_value(vessel.get("fujairahConsent")),
             "yanbuConsent": normalize_report_value(vessel.get("yanbuConsent")),
             "consentLetter": normalize_report_value(vessel.get("consentLetter")),
             "voyagePlan": normalize_report_value(vessel.get("voyagePlan")),
+            "agSupplyPlan": normalize_report_value(vessel.get("agSupplyPlan")),
             "crewPlanStatus": normalize_report_value(vessel.get("crewPlanStatus"), "불요"),
             "crewCount": normalize_report_value(vessel.get("crewCount")),
             "crewDate": normalize_report_value(vessel.get("crewDate")),
@@ -240,13 +284,42 @@ def build_report_rows(vessels):
 
 
 def report_summary(vessels):
+    def norm_text(value):
+        return str(value or "").strip()
+
+    def norm_category(value):
+        v = norm_text(value)
+        if v in ["AG 내", "얀부, 푸자이라", "그외 지역"]:
+            return v
+        return "AG 내"
+
+    both_area_vessels = [
+        v for v in vessels
+        if norm_category(v.get("category")) == "얀부, 푸자이라"
+    ]
+
     return {
         "total": len(vessels),
-        "fujairah_yes": sum(1 for v in vessels if str(v.get("fujairahConsent", "")).strip() == "동의"),
-        "yanbu_yes": sum(1 for v in vessels if str(v.get("yanbuConsent", "")).strip() == "동의"),
-        "no_consent": sum(1 for v in vessels if str(v.get("consentLetter", "")).strip() == "미확보"),
-        "crew_confirmed": sum(1 for v in vessels if str(v.get("crewPlanStatus", "")).strip() == "확정"),
-        "crew_pending": sum(1 for v in vessels if str(v.get("crewPlanStatus", "")).strip() == "미정"),
+        "fujairah_yes": sum(
+            1 for v in both_area_vessels
+            if norm_text(v.get("fujairahConsent")) == "동의"
+        ),
+        "yanbu_yes": sum(
+            1 for v in both_area_vessels
+            if norm_text(v.get("yanbuConsent")) == "동의"
+        ),
+        "no_consent": sum(
+            1 for v in vessels
+            if norm_text(v.get("consentLetter")) == "미확보"
+        ),
+        "crew_confirmed": sum(
+            1 for v in vessels
+            if norm_text(v.get("crewPlanStatus")) == "확정"
+        ),
+        "crew_pending": sum(
+            1 for v in vessels
+            if norm_text(v.get("crewPlanStatus")) == "미정"
+        ),
     }
 
 
@@ -677,20 +750,42 @@ def add_no_cache_headers(response):
 def index():
     return render_template("index.html", version=get_asset_version())
 
-
 @app.route("/report")
 def report():
     vessels = load_vessels()
-    rows = build_report_rows(vessels)
-    summary = report_summary(vessels)
-    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    filter_name = request.args.get("filter", "all")
+    filtered_vessels = filter_vessels_for_report(vessels, filter_name)
+
+    summary = report_summary(filtered_vessels)
+    rows = build_report_rows(filtered_vessels)
+
+    filter_label_map = {
+        "all": "전체",
+        "ag": "AG 내",
+        "bothArea": "얀부, 푸자이라",
+        "other": "그외 지역",
+        "fujairah": "푸자이라 동의",
+        "yanbu": "얀부 동의",
+        "crewConfirmed": "선원교대 확정",
+        "crewPending": "선원교대 미정",
+    }
+
+    report_mode = "all"
+    if filter_name == "ag":
+        report_mode = "ag"
+    elif filter_name == "bothArea":
+        report_mode = "bothArea"
+    elif filter_name == "other":
+        report_mode = "other"
 
     return render_template(
         "report.html",
-        version=get_asset_version(),
         rows=rows,
         summary=summary,
-        generated_at=generated_at
+        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        version=get_asset_version(),
+        report_filter_label=filter_label_map.get(filter_name, "전체"),
+        report_mode=report_mode
     )
 
 

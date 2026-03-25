@@ -939,3 +939,17 @@ button:hover {
 .position-result-list-item:last-child {
   margin-bottom: 0;
 }
+
+.form-row.hidden-by-category {
+  display: none !important;
+}
+
+.map-toolbar-search-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#toggleAllLabelsBtn {
+  white-space: nowrap;
+}
