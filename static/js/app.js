@@ -245,6 +245,10 @@ function getVesselColor(vessel) {
     return 'red';
   }
 
+  if (normalizeConsent(vessel.consentLetter) === '진행중') {
+    return 'orange';
+  }
+
   if (vessel.crewPlanStatus === '확정') {
     return 'yellow';
   }
@@ -260,9 +264,11 @@ function getShipIcon(vessel) {
   const type = getVesselColor(vessel);
   const fill = type === 'red'
     ? '#ef4444'
-    : type === 'yellow'
-      ? '#eab308'
-      : '#22c55e';
+    : type === 'orange'
+      ? '#f97316'
+      : type === 'yellow'
+        ? '#eab308'
+        : '#22c55e';
 
   return L.divIcon({
     className: 'ship-icon-wrap',
@@ -271,7 +277,6 @@ function getShipIcon(vessel) {
     iconAnchor: [13, 13]
   });
 }
-
 function getNameIcon(name) {
   return L.divIcon({
     className: 'ship-name-icon',

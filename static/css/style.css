@@ -953,3 +953,13 @@ button:hover {
 #toggleAllLabelsBtn {
   white-space: nowrap;
 }
+
+.map-value-orange {
+  color: #f97316; /* 주황 */
+  font-weight: 600;
+}
+
+.list-value-orange {
+  color: #f97316;
+  font-weight: 600;
+}
