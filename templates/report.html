@@ -11,9 +11,10 @@
 {% macro badge(value) %}
   {% set v = value or '' %}
   <span class="report-badge
-    {% if v in ['동의', '확보', '불요'] %}good
+    {% if v in ['동의', '확보'] %}good
     {% elif v in ['확인중', '진행중', '확정'] %}warning
     {% elif v in ['미동의', '미확보', '미정'] %}danger
+    {% elif v == '불요' %}neutral
     {% else %}normal{% endif %}">
     {{ v }}
   </span>
@@ -54,16 +55,10 @@
   </div>
   {% endif %}
 
-<div class="report-summary-card danger">
-  <div class="label">
-    {% if report_mode == 'bothArea' or report_mode == 'all' %}
-      동의서 미확보/진행중
-    {% else %}
-      동의서 미확보
-    {% endif %}
+  <div class="report-summary-card danger">
+    <div class="label">동의서 미확보/진행 중</div>
+    <div class="value">{{ summary.no_consent }}척</div>
   </div>
-  <div class="value">{{ summary.no_consent }}척</div>
-</div>
 
   <div class="report-summary-card warning">
     <div class="label">선원교대 확정</div>

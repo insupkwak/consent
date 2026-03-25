@@ -41,6 +41,8 @@ const countYanbu = document.getElementById('countYanbu');
 const countCrewConfirmed = document.getElementById('countCrewConfirmed');
 const countCrewPending = document.getElementById('countCrewPending');
 
+const allViewStateText = document.getElementById('allViewStateText');
+
 let vessels = [];
 let markers = [];
 let nameMarkers = [];
@@ -277,6 +279,7 @@ function getShipIcon(vessel) {
     iconAnchor: [13, 13]
   });
 }
+
 function getNameIcon(name) {
   return L.divIcon({
     className: 'ship-name-icon',
@@ -433,6 +436,8 @@ function makeLabelHtml(vessel, index) {
     </div>
   `;
 }
+
+
 function updateToolbarButtons() {
   const buttonMap = {
     all: filterAllBtn,
@@ -453,18 +458,29 @@ function updateToolbarButtons() {
     buttonMap[currentFilter].classList.add('active');
   }
 
+
   updateToggleAllLabelsButton();
 }
+
+
 
 function updateToggleAllLabelsButton() {
   if (!toggleAllLabelsBtn) return;
 
-  if (labelMode === 'all') {
+  const isAllLabels = labelMode === 'all';
+
+  if (isAllLabels) {
     toggleAllLabelsBtn.classList.add('active');
   } else {
     toggleAllLabelsBtn.classList.remove('active');
   }
+
+  if (allViewStateText) {
+    allViewStateText.textContent = isAllLabels ? 'ON' : 'OFF';
+  }
 }
+
+
 function updateStatusBoard() {
   if (countAll) {
     countAll.textContent = `${vessels.length}척`;
@@ -497,7 +513,7 @@ function updateStatusBoard() {
   if (countCrewPending) {
     countCrewPending.textContent = `${vessels.filter(v => normalizeCrewPlanStatus(v.crewPlanStatus) === '미정').length}척`;
   }
-
+  
   updateToolbarButtons();
 }
 async function loadData(options = {}) {
