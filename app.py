@@ -310,7 +310,7 @@ def report_summary(vessels):
         ),
         "no_consent": sum(
             1 for v in vessels
-            if norm_text(v.get("consentLetter")) == "미확보"
+            if norm_text(v.get("consentLetter")) in ["미확보", "진행중"]
         ),
         "crew_confirmed": sum(
             1 for v in vessels

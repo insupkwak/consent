@@ -54,10 +54,16 @@
   </div>
   {% endif %}
 
-  <div class="report-summary-card danger">
-    <div class="label">동의서 미확보</div>
-    <div class="value">{{ summary.no_consent }}척</div>
+<div class="report-summary-card danger">
+  <div class="label">
+    {% if report_mode == 'bothArea' or report_mode == 'all' %}
+      동의서 미확보/진행중
+    {% else %}
+      동의서 미확보
+    {% endif %}
   </div>
+  <div class="value">{{ summary.no_consent }}척</div>
+</div>
 
   <div class="report-summary-card warning">
     <div class="label">선원교대 확정</div>
