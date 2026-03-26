@@ -37,43 +37,70 @@
     </div>
 
     <!-- KPI -->
- <div class="report-summary-grid report-summary-grid-wide">
-  <div class="report-summary-card report-summary-card-main">
-    <div class="label">전체 선박</div>
-    <div class="value">{{ summary.total }}척</div>
-  </div>
+    <div class="report-summary-grid report-summary-grid-wide">
+      <div class="report-summary-card report-summary-card-main">
+        <div class="label">전체 선박</div>
+        <div class="value">{{ summary.total }}척</div>
+      </div>
 
-  {% if report_mode == 'bothArea' or report_mode == 'all' %}
-  <div class="report-summary-card good">
-    <div class="label">푸자이라 동의</div>
-    <div class="value">{{ summary.fujairah_yes }}척</div>
-  </div>
+      {% if report_mode == 'bothArea' or report_mode == 'all' %}
+      <div class="report-summary-card good">
+        <div class="label">푸자이라 동의</div>
+        <div class="value">{{ summary.fujairah_yes }}척</div>
+      </div>
 
-  <div class="report-summary-card good">
-    <div class="label">얀부 동의</div>
-    <div class="value">{{ summary.yanbu_yes }}척</div>
-  </div>
-  {% endif %}
+      <div class="report-summary-card good">
+        <div class="label">얀부 동의</div>
+        <div class="value">{{ summary.yanbu_yes }}척</div>
+      </div>
+      {% endif %}
 
-  <div class="report-summary-card danger">
-    <div class="label">동의서 미확보/진행 중</div>
-    <div class="value">{{ summary.no_consent }}척</div>
-  </div>
+      <div class="report-summary-card danger">
+        <div class="label">동의서 미확보/진행 중</div>
+        <div class="value">{{ summary.no_consent }}척</div>
+      </div>
 
-  <div class="report-summary-card warning">
-    <div class="label">선원교대 확정</div>
-    <div class="value">{{ summary.crew_confirmed }}척</div>
-  </div>
+      <div class="report-summary-card warning">
+        <div class="label">선원교대 확정</div>
+        <div class="value">{{ summary.crew_confirmed }}척</div>
+      </div>
 
-  <div class="report-summary-card danger">
-    <div class="label">선원교대 미정</div>
-    <div class="value">{{ summary.crew_pending }}척</div>
-  </div>
-</div>
+      <div class="report-summary-card danger">
+        <div class="label">선원교대 미정</div>
+        <div class="value">{{ summary.crew_pending }}척</div>
+      </div>
+    </div>
 
     <!-- TABLE -->
     <div class="report-table-wrap">
-      <table class="report-table report-table-enhanced">
+      <table class="report-table report-table-enhanced report-table-fixed">
+
+        <colgroup>
+          <col class="col-no">
+          <col class="col-vessel">
+          <col class="col-normal">
+
+          {% if report_mode == 'bothArea' or report_mode == 'all' %}
+            <col class="col-normal">
+            <col class="col-normal">
+          {% endif %}
+
+          {% if report_mode == 'bothArea' or report_mode == 'ag' or report_mode == 'all' %}
+            <col class="col-normal">
+          {% endif %}
+
+          <col class="col-voyage">
+
+          {% if report_mode == 'ag' or report_mode == 'all' %}
+            <col class="col-quarter">
+          {% endif %}
+
+          <col class="col-normal">
+          <col class="col-normal">
+          <col class="col-normal">
+          <col class="col-normal">
+          <col class="col-quarter">
+        </colgroup>
 
         <thead>
           <tr>
@@ -93,8 +120,8 @@
             <th>항차계획</th>
 
             {% if report_mode == 'ag' or report_mode == 'all' %}
-            <th>윤활유 보급계획 등</th>
-            {% endif %} 
+              <th>윤활유 보급계획 등</th>
+            {% endif %}
 
             <th>선원교대계획</th>
             <th>선원교대인원</th>
@@ -126,7 +153,6 @@
             {% if report_mode == 'ag' or report_mode == 'all' %}
               <td class="left">{{ row.agSupplyPlan or '' }}</td>
             {% endif %}
-
 
             <td>{{ badge(row.crewPlanStatus) if row.crewPlanStatus else '' }}</td>
             <td>{{ row.crewCount or '' }}</td>
