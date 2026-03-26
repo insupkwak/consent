@@ -184,6 +184,22 @@ function getCategoryDisplayMask(category) {
   };
 }
 
+
+function handleConsentByCategory() {
+  const category = document.getElementById('category')?.value || '';
+  const consent = document.getElementById('consentLetter');
+
+  if (!consent) return;
+
+  if (category === '그외 지역') {
+    consent.value = '불요';
+  } else {
+    if (consent.value === '불요') {
+      consent.value = '';
+    }
+  }
+}
+
 function toggleRow(id, visible) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -216,11 +232,12 @@ function applyCategoryVisibility(categoryValue) {
 const categorySelect = document.getElementById('category');
 
 if (categorySelect) {
-  categorySelect.addEventListener('change', () => {
-    applyCategoryVisibility(categorySelect.value);
-    renderExternalLabels();
-    renderList();
-  });
+    categorySelect.addEventListener('change', () => {
+      applyCategoryVisibility(categorySelect.value);
+      handleConsentByCategory();   // ✅ 여기 추가
+      renderExternalLabels();
+      renderList();
+    });
 }
 
 const crewPlanStatusSelect = document.getElementById('crewPlanStatus');
@@ -1145,6 +1162,7 @@ function fillFormByVessel(index) {
   document.getElementById('longitude').value = vessel.longitude ?? '';
 
   applyCategoryVisibility(vessel.category);
+  handleConsentByCategory();   // ✅ 추가
   editIndex = index;
   editingOriginalName = String(vessel.name || '').trim();
 }
@@ -1477,4 +1495,5 @@ if (document.getElementById('category')) {
   applyCategoryVisibility(document.getElementById('category').value);
 }
 
+handleConsentByCategory();   // ✅ 추가
 loadData({ preserveSelection: true, fitBounds: true });

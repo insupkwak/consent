@@ -39,7 +39,7 @@
 
   <div class="form-row" id="row-category">
     <label for="category">분류</label>
-    <select id="category">
+    <select id="category" onchange="toggleConsentLetterRowByCategory()">
       <option value="AG 내">AG 내</option>
       <option value="얀부, 푸자이라">얀부, 푸자이라</option>
       <option value="그외 지역">그외 지역</option>
@@ -66,14 +66,15 @@
     </select>
   </div>
 
-  <div class="form-row" id="row-consentLetter">
-    <label for="consentLetter">동의서 확보 상태</label>
-    <select id="consentLetter">
-      <option value="확보">확보</option>
-      <option value="미확보">미확보</option>
-      <option value="진행중">진행중</option>
-    </select>
-  </div>
+      <div class="form-row" id="row-consentLetter">
+        <label for="consentLetter">동의서 확보</label>
+        <select id="consentLetter">
+          <option value="확보">확보</option>
+          <option value="미확보">미확보</option>
+          <option value="진행중">진행중</option>
+          <option value="불요">불요</option>
+        </select>
+      </div>
 
   <div class="form-row" id="row-voyagePlan">
     <label for="voyagePlan">항차계획</label>
