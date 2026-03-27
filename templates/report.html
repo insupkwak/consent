@@ -91,8 +91,8 @@
 
           <col class="col-voyage">
 
-          {% if report_mode == 'ag' or report_mode == 'all' %}
-            <col class="col-quarter">
+          {% if report_mode == 'ag' %}
+            <col class="col-ag-supply">
           {% endif %}
 
           <col class="col-normal">
@@ -119,7 +119,7 @@
 
             <th>항차계획</th>
 
-            {% if report_mode == 'ag' or report_mode == 'all' %}
+            {% if report_mode == 'ag' %}
               <th>윤활유 보급계획 등</th>
             {% endif %}
 
@@ -150,8 +150,8 @@
 
             <td class="left">{{ row.voyagePlan or '' }}</td>
 
-            {% if report_mode == 'ag' or report_mode == 'all' %}
-              <td class="left">{{ row.agSupplyPlan or '' }}</td>
+            {% if report_mode == 'ag' %}
+              <td class="left ag-supply-cell">{{ row.agSupplyPlan or '' }}</td>
             {% endif %}
 
             <td>{{ badge(row.crewPlanStatus) if row.crewPlanStatus else '' }}</td>

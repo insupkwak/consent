@@ -999,3 +999,11 @@ button:hover {
   border-color: #cbd5e1;
 }
 
+.report-table-fixed .col-ag-supply {
+  width: 600px;
+}
+
+.ag-supply-cell {
+  white-space: normal;
+  word-break: keep-all;
+}
