@@ -29,7 +29,10 @@
         <form id="vesselForm">
           <div class="form-row">
             <label for="vesselName">선박명</label>
-            <input type="text" id="vesselName" placeholder="예: RIO DE JANEIRO ENERGY" required />
+            <input type="text" id="vesselName"
+                  placeholder="예: RIO DE JANEIRO ENERGY"
+                  required
+                  readonly />
           </div>
 
           <div class="form-row">
@@ -168,6 +171,13 @@
           <input type="text" id="shipSearchInput" placeholder="선박검색" autocomplete="off" />
           <div id="shipSearchDropdown" class="search-dropdown"></div>
         </div>
+
+
+        <button type="button" id="toggleAllLabelsBtn" class="toolbar-chip toolbar-chip-btn">
+          <span class="toolbar-chip-label">전체 보기</span>
+          <span class="toolbar-chip-value" id="allViewStateText">OFF</span>
+        </button>
+
 
         <button type="button" id="filterAllBtn" class="toolbar-chip toolbar-chip-btn active">
           <span class="toolbar-chip-label">전체</span>

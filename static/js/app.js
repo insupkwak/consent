@@ -500,30 +500,52 @@ function makeCrewPlanBlock(vessel, mask) {
 }
 
 
-
 function makeLabelHtml(vessel, index) {
   const cls = getVesselColor(vessel);
   const mask = getCategoryDisplayMask(vessel.category);
   const ageText = formatVesselAge(vessel.deliveryDate);
 
+  const hasMeaningfulText = (value) => {
+    const text = String(value ?? '').trim();
+    return text !== '' && text !== '-' && text !== '불요';
+  };
+
   const row = (label, value, extraClass = '') => {
     const text = String(value ?? '').trim();
+    if (!text) return '';
     return `
       <div class="detail-row">
         <div class="detail-key">${escapeHtml(label)}</div>
-        <div class="detail-val ${extraClass}">${text ? escapeHtml(text) : '-'}</div>
+        <div class="detail-val ${extraClass}">${escapeHtml(text)}</div>
       </div>
     `;
   };
 
-  const rowHtml = (label, html, extraClass = '') => `
-    <div class="detail-row">
-      <div class="detail-key">${escapeHtml(label)}</div>
-      <div class="detail-val ${extraClass}">${html || '-'}</div>
-    </div>
-  `;
+  const rowHtml = (label, html, extraClass = '') => {
+    const text = String(html ?? '').trim();
+    if (!text || text === '-') return '';
+    return `
+      <div class="detail-row">
+        <div class="detail-key">${escapeHtml(label)}</div>
+        <div class="detail-val ${extraClass}">${html}</div>
+      </div>
+    `;
+  };
 
   const divider = `<div class="detail-divider"></div>`;
+
+  const makeSection = (title, bodyHtml) => {
+    if (!String(bodyHtml || '').trim()) return '';
+    return `
+      ${divider}
+      <div class="detail-section-block">
+        <div class="detail-section-title">${escapeHtml(title)}</div>
+        <div class="detail-section-body">
+          ${bodyHtml}
+        </div>
+      </div>
+    `;
+  };
 
   let basicInfo = `
     ${row('관리사', vessel.managementCompany)}
@@ -531,46 +553,54 @@ function makeLabelHtml(vessel, index) {
     ${row('Builder', vessel.builder, 'multiline')}
     ${row('Delivery Date', vessel.deliveryDate)}
     ${row('Next Dry dock', vessel.nextDryDock)}
-  `;
+  `.trim();
 
   let routeInfo = `
     ${row('분류', normalizeCategory(vessel.category))}
     ${mask.voyagePlan ? row('항차계획', vessel.voyagePlan, 'multiline') : ''}
     ${mask.agSupplyPlan && hasText(vessel.agSupplyPlan) ? row('윤활유 보급계획 등', vessel.agSupplyPlan, 'multiline') : ''}
-  `;
+  `.trim();
 
   let consentInfo = '';
-  if (mask.fujairahConsent) {
+  if (mask.fujairahConsent && hasMeaningfulText(vessel.fujairahConsent)) {
     consentInfo += rowHtml('푸자이라항 동의 여부', highlightValue(vessel.fujairahConsent));
   }
-  if (mask.yanbuConsent) {
+  if (mask.yanbuConsent && hasMeaningfulText(vessel.yanbuConsent)) {
     consentInfo += rowHtml('얀부항 동의 여부', highlightValue(vessel.yanbuConsent));
   }
-  if (mask.consentLetter) {
+  if (mask.consentLetter && hasMeaningfulText(vessel.consentLetter)) {
     consentInfo += rowHtml('동의서 확보', highlightValue(vessel.consentLetter));
-  }
-  if (!consentInfo.trim()) {
-    consentInfo = row('해당 없음', '-');
   }
 
   const crewStatus = normalizeCrewPlanStatus(vessel.crewPlanStatus);
-  let crewInfo = `
-    ${rowHtml('선원교대 계획', highlightValue(crewStatus))}
-  `;
+  let crewInfo = '';
 
-  if (crewStatus !== '불요') {
-    crewInfo += `
-      ${row('선원교대 인원', hasText(vessel.crewCount) ? `${vessel.crewCount}명` : '')}
-      ${row('선원교대 날짜', vessel.crewDate)}
-      ${row('선원교대 항구', vessel.crewPort)}
-      ${row('선원교대 상세', vessel.crewPlanDetail, 'multiline')}
-    `;
+  const hasCrewExtra =
+    hasText(vessel.crewCount) ||
+    hasText(vessel.crewDate) ||
+    hasText(vessel.crewPort) ||
+    hasText(vessel.crewPlanDetail);
+
+  if (crewStatus !== '불요' || hasCrewExtra) {
+    crewInfo += rowHtml('선원교대 계획', highlightValue(crewStatus));
+
+    if (crewStatus !== '불요') {
+      crewInfo += `
+        ${row('선원교대 인원', hasText(vessel.crewCount) ? `${vessel.crewCount}명` : '')}
+        ${row('선원교대 날짜', vessel.crewDate)}
+        ${row('선원교대 항구', vessel.crewPort)}
+        ${row('선원교대 상세', vessel.crewPlanDetail, 'multiline')}
+      `;
+    }
   }
 
-  let bonusInfo = `
-    ${row('보너스 횟수', hasText(vessel.bonusCount) ? `${vessel.bonusCount}회` : '')}
-    ${row('보너스 총액 ($)', hasText(vessel.bonusAmount) ? formatMoney(vessel.bonusAmount) : '')}
-  `;
+  let bonusInfo = '';
+  if (hasText(vessel.bonusCount)) {
+    bonusInfo += row('보너스 횟수', `${vessel.bonusCount}회`);
+  }
+  if (hasText(vessel.bonusAmount)) {
+    bonusInfo += row('보너스 총액 ($)', formatMoney(vessel.bonusAmount));
+  }
 
   return `
     <div class="map-label map-label-redesign ${cls}" data-index="${index}">
@@ -578,50 +608,11 @@ function makeLabelHtml(vessel, index) {
         <div class="detail-panel-title">${escapeHtml(vessel.name)}</div>
       </div>
 
-      ${divider}
-
-      <div class="detail-section-block">
-        <div class="detail-section-title">기본정보</div>
-        <div class="detail-section-body">
-          ${basicInfo}
-        </div>
-      </div>
-
-      ${divider}
-
-      <div class="detail-section-block">
-        <div class="detail-section-title">운항지침</div>
-        <div class="detail-section-body">
-          ${routeInfo}
-        </div>
-      </div>
-
-      ${divider}
-
-      <div class="detail-section-block">
-        <div class="detail-section-title">동의서</div>
-        <div class="detail-section-body">
-          ${consentInfo}
-        </div>
-      </div>
-
-      ${divider}
-
-      <div class="detail-section-block">
-        <div class="detail-section-title">선원교대</div>
-        <div class="detail-section-body">
-          ${crewInfo}
-        </div>
-      </div>
-
-      ${divider}
-
-      <div class="detail-section-block">
-        <div class="detail-section-title">보너스</div>
-        <div class="detail-section-body">
-          ${bonusInfo}
-        </div>
-      </div>
+      ${makeSection('기본정보', basicInfo)}
+      ${makeSection('운항지침', routeInfo)}
+      ${makeSection('동의서', consentInfo)}
+      ${makeSection('선원교대', crewInfo)}
+      ${makeSection('보너스', bonusInfo)}
 
       <div class="detail-panel-footer">
         <button type="button" class="map-mini-btn close" onclick="closeLabel(${index})">닫기</button>
@@ -631,7 +622,6 @@ function makeLabelHtml(vessel, index) {
     </div>
   `;
 }
-
 
 function updateToolbarButtons() {
   const buttonMap = {
@@ -1010,24 +1000,45 @@ function renderMap(fitBounds = false) {
 
   setTimeout(renderExternalLabels, 120);
 }
-
-function distributeVerticalSlots(count, totalHeight, boxH, gap, topPad = 16, bottomPad = 90) {
+function distributeVerticalSlots(count, totalHeight, boxH, gap, topPad = 10, bottomPad = 10) {
   if (count === 0) return [];
 
   const usableHeight = totalHeight - topPad - bottomPad;
   const totalNeed = count * boxH + (count - 1) * gap;
 
-  let startY = topPad;
+  // 🔥 아래 기준으로 시작 위치 계산
+  let startY = totalHeight - bottomPad - boxH;
+
   if (totalNeed < usableHeight) {
-    startY = topPad + (usableHeight - totalNeed) / 2;
+    // 중앙 정렬 유지하면서도 "아래 기준"으로 맞춤
+    startY = totalHeight - bottomPad - ((usableHeight + totalNeed) / 2);
   }
 
   const slots = [];
   for (let i = 0; i < count; i++) {
-    slots.push(startY + i * (boxH + gap));
+    // 🔥 핵심: 위로 쌓기
+    slots.push(startY - i * (boxH + gap));
   }
+
   return slots;
 }
+
+function distributeFixedGridBottomRows(count, colsPerRow = 4, boxW = 260, boxH = 310, gapX = 16, gapY = 12, leftStart = 16, baseBottom = 16) {
+  const positions = [];
+
+  for (let i = 0; i < count; i++) {
+    const row = Math.floor(i / colsPerRow); // 0,0,0,0,1,1,1,1...
+    const col = i % colsPerRow;             // 0,1,2,3,0,1,2,3...
+
+    positions.push({
+      left: leftStart + col * (boxW + gapX),
+      bottom: baseBottom + row * (boxH + gapY)
+    });
+  }
+
+  return positions;
+}
+
 
 function distributeHorizontalSlots(count, totalWidth, boxW, gap, leftPad = 16, rightPad = 16) {
   if (count === 0) return [];
@@ -1108,6 +1119,8 @@ function getCurrentlyVisibleTargetVessels() {
   return getFilteredVessels().filter(vessel => bounds.contains([vessel.latitude, vessel.longitude]));
 }
 
+
+
 function renderExternalLabels() {
   clearLabels();
 
@@ -1116,109 +1129,88 @@ function renderExternalLabels() {
   const wrapWidth = mapWrap.clientWidth;
   const wrapHeight = mapWrap.clientHeight;
 
-  let renderTargets = [];
-
+  // =========================
+  // 1) 선박 1개 선택 시
+  //    선박 가까이에 표시
+  // =========================
   if (labelMode === 'one' && activeLabelIndex !== null) {
     const vessel = vessels[activeLabelIndex];
-    if (vessel && getFilteredVessels().includes(vessel)) {
-      renderTargets = [{ vessel, index: activeLabelIndex }];
+    if (!vessel || !getFilteredVessels().includes(vessel)) return;
+
+    const point = map.latLngToContainerPoint([vessel.latitude, vessel.longitude]);
+    const item = { vessel, index: activeLabelIndex, point };
+
+    const boxW = 350;
+    const boxH = 530;
+    const margin = 250;
+
+    let left = point.x + margin;
+    let top = point.y - (boxH / 2);
+    let side = 'right';
+
+    // 오른쪽 공간 부족하면 왼쪽으로
+    if (left + boxW > wrapWidth - 10) {
+      left = point.x - boxW - margin;
+      side = 'left';
     }
-  } else {
-    const currentlyVisible = getCurrentlyVisibleTargetVessels();
-    renderTargets = currentlyVisible
-      .map(vessel => ({
-        vessel,
-        index: vessels.findIndex(v => String(v.name || '').trim().toLowerCase() === String(vessel.name || '').trim().toLowerCase())
-      }))
-      .filter(item => !hiddenLabelIndices.has(item.index));
+
+    // 왼쪽도 부족하면 화면 안으로 강제
+    if (left < 10) {
+      left = 10;
+      side = 'right';
+    }
+
+    // 위쪽 잘림 방지
+    if (top < 70) {
+      top = 70;
+    }
+
+    // 아래쪽 잘림 방지
+    if (top + boxH > wrapHeight - 10) {
+      top = wrapHeight - boxH - 10;
+    }
+
+    createEdgeLabel(item, left, top, boxW, boxH, side);
+    return;
   }
+
+  // =========================
+  // 2) 전체 보기 시
+  //    아래 1행 최대 5척
+  // =========================
+  let renderTargets = [];
+
+  const currentlyVisible = getCurrentlyVisibleTargetVessels();
+  renderTargets = currentlyVisible
+    .map(vessel => {
+      const index = vessels.findIndex(
+        v => String(v.name || '').trim().toLowerCase() === String(vessel.name || '').trim().toLowerCase()
+      );
+      const point = map.latLngToContainerPoint([vessel.latitude, vessel.longitude]);
+      return { vessel, index, point };
+    })
+    .filter(item => item.index >= 0 && !hiddenLabelIndices.has(item.index));
 
   if (!renderTargets.length) return;
 
-  const topItems = [];
-  const bottomItems = [];
-  const leftItems = [];
-  const rightItems = [];
+  renderTargets = renderTargets.slice(0, 5);
 
-  const centerX = wrapWidth / 2;
-  const centerY = wrapHeight / 2;
+  const boxW = 300;
+  const boxH = 530;
+  const colsPerRow = 5;
+  const gapX = 5;
+  const gapY = 5;
+  const startLeft = 5;
+  const startBottom = 5;
 
-  renderTargets.forEach(({ vessel, index }) => {
-    const point = map.latLngToContainerPoint([vessel.latitude, vessel.longitude]);
-    const item = { vessel, index, point };
+  renderTargets.forEach((item, i) => {
+    const row = Math.floor(i / colsPerRow);
+    const col = i % colsPerRow;
 
-    const dx = point.x - centerX;
-    const dy = point.y - centerY;
+    const left = startLeft + col * (boxW + gapX);
+    const top = wrapHeight - boxH - startBottom - row * (boxH + gapY);
 
-    if (Math.abs(dx) > Math.abs(dy)) {
-      if (dx < 0) {
-        leftItems.push(item);
-      } else {
-        rightItems.push(item);
-      }
-    } else {
-      if (dy < 0) {
-        topItems.push(item);
-      } else {
-        bottomItems.push(item);
-      }
-    }
-  });
-
-  topItems.sort((a, b) => a.point.x - b.point.x);
-  bottomItems.sort((a, b) => a.point.x - b.point.x);
-  leftItems.sort((a, b) => a.point.y - b.point.y);
-  rightItems.sort((a, b) => a.point.y - b.point.y);
-
-  const boxW = 320;
-  const boxH = 560;
-  const gap = 10;
-
-  const topY = 70;
-  const bottomY = wrapHeight - boxH - 0;
-  const leftX = 16;
-  const rightX = wrapWidth - boxW - 16;
-
-  const topSlots = distributeHorizontalSlots(topItems.length, wrapWidth, boxW, gap, 16, 16);
-  const bottomSlots = distributeHorizontalSlots(bottomItems.length, wrapWidth, boxW, gap, 16, 16);
-  const leftSlots = distributeVerticalSlots(leftItems.length, wrapHeight, boxH, gap, 16, 90);
-  const rightSlots = distributeVerticalSlots(rightItems.length, wrapHeight, boxH, gap, 16, 90);
-
-  topItems.forEach((item, i) => createEdgeLabel(item, topSlots[i], topY, boxW, boxH, 'top'));
-  bottomItems.forEach((item, i) => createEdgeLabel(item, bottomSlots[i], bottomY, boxW, boxH, 'bottom'));
-  leftItems.forEach((item, i) => createEdgeLabel(item, leftX, leftSlots[i], boxW, boxH, 'left'));
-  rightItems.forEach((item, i) => createEdgeLabel(item, rightX, rightSlots[i], boxW, boxH, 'right'));
-}
-
-function updateLeaderLines() {
-  labelObjects.forEach(obj => {
-    const point = map.latLngToContainerPoint([obj.item.vessel.latitude, obj.item.vessel.longitude]);
-    const rect = obj.label.getBoundingClientRect();
-    const wrapRect = mapWrap.getBoundingClientRect();
-
-    const left = rect.left - wrapRect.left;
-    const top = rect.top - wrapRect.top;
-    const width = rect.width;
-    const height = rect.height;
-
-    let toX = left + width / 2;
-    let toY = top + height / 2;
-
-    if (obj.side === 'left') {
-      toX = left + width;
-      toY = top + height / 2;
-    } else if (obj.side === 'right') {
-      toX = left;
-      toY = top + height / 2;
-    } else if (obj.side === 'top') {
-      toX = left + width / 2;
-      toY = top + height;
-    } else if (obj.side === 'bottom') {
-      toX = left + width / 2;
-      toY = top;
-    }
-
-    drawLeader(obj.line, point.x, point.y, toX, toY);
+    createEdgeLabel(item, left, top, boxW, boxH, 'left');
   });
 }
 
@@ -1286,7 +1278,10 @@ function resetForm() {
   document.getElementById('crewPlanStatus').value = '불요';
   document.getElementById('category').value = 'AG 내';
 
-  document.getElementById('vesselName').value = '';
+  const vesselNameInput = document.getElementById('vesselName');
+  vesselNameInput.value = '';
+  vesselNameInput.readOnly = true;
+
   document.getElementById('managementCompany').value = '';
   document.getElementById('builder').value = '';
   document.getElementById('deliveryDate').value = '';
@@ -1350,7 +1345,11 @@ function fillFormByVessel(index) {
   const vessel = vessels[index];
   if (!vessel) return;
 
-  document.getElementById('vesselName').value = vessel.name || '';
+
+  const vesselNameInput = document.getElementById('vesselName');
+  vesselNameInput.value = vessel.name || '';
+  vesselNameInput.readOnly = true;
+
   document.getElementById('managementCompany').value = vessel.managementCompany || '';
   document.getElementById('builder').value = vessel.builder || '';
   document.getElementById('deliveryDate').value = vessel.deliveryDate || '';
