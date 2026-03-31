@@ -25,6 +25,9 @@ const filterAgBtn = document.getElementById('filterAgBtn');
 const filterBothAreaBtn = document.getElementById('filterBothAreaBtn');
 const filterOtherBtn = document.getElementById('filterOtherBtn');
 const filterUnder15Btn = document.getElementById('filterUnder15Btn');
+const filterDryDock6mBtn = document.getElementById('filterDryDock6mBtn');
+const countDryDock6m = document.getElementById('countDryDock6m');
+
 const filterFujairahBtn = document.getElementById('filterFujairahBtn');
 const filterYanbuBtn = document.getElementById('filterYanbuBtn');
 const filterCrewConfirmedBtn = document.getElementById('filterCrewConfirmedBtn');
@@ -58,6 +61,7 @@ let currentFilter = 'all';
 let uploadTargetIndex = null;
 let isLoading = false;
 let isSaving = false;
+let hiddenLabelIndices = new Set();
 
 const shipSvg = (color) => `
   <div class="ship-icon">
@@ -306,6 +310,19 @@ function isUnder15Years(vessel) {
   return years < 15;
 }
 
+function isDryDockWithin6MonthsOrOverdue(vessel) {
+  const dt = parseDateOnly(vessel.nextDryDock);
+  if (!dt) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const sixMonthsLater = new Date(today);
+  sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+
+  return dt <= sixMonthsLater;
+}
+
 function getVesselColor(vessel) {
   if (normalizeConsent(vessel.consentLetter) === '미확보') {
     return 'red';
@@ -407,6 +424,12 @@ function getFilteredVessels() {
     return vessels.filter(v => isUnder15Years(v));
   }
 
+
+  if (currentFilter === 'dryDock6m') {
+    return vessels.filter(v => isDryDockWithin6MonthsOrOverdue(v));
+  }
+
+  
   if (currentFilter === 'fujairah') {
     return vessels.filter(v => normalizeConsent(v.fujairahConsent) === '동의');
   }
@@ -480,34 +503,139 @@ function makeCrewPlanBlock(vessel, mask) {
   return html;
 }
 
+
+
 function makeLabelHtml(vessel, index) {
   const cls = getVesselColor(vessel);
   const mask = getCategoryDisplayMask(vessel.category);
   const ageText = formatVesselAge(vessel.deliveryDate);
 
+  const row = (label, value, extraClass = '') => {
+    const text = String(value ?? '').trim();
+    return `
+      <div class="detail-row">
+        <div class="detail-key">${escapeHtml(label)}</div>
+        <div class="detail-val ${extraClass}">${text ? escapeHtml(text) : '-'}</div>
+      </div>
+    `;
+  };
+
+  const rowHtml = (label, html, extraClass = '') => `
+    <div class="detail-row">
+      <div class="detail-key">${escapeHtml(label)}</div>
+      <div class="detail-val ${extraClass}">${html || '-'}</div>
+    </div>
+  `;
+
+  const divider = `<div class="detail-divider"></div>`;
+
+  let basicInfo = `
+    ${row('관리사', vessel.managementCompany)}
+    ${row('선령', ageText)}
+    ${row('Builder', vessel.builder, 'multiline')}
+    ${row('Delivery Date', vessel.deliveryDate)}
+    ${row('Next Dry dock', vessel.nextDryDock)}
+  `;
+
+  let routeInfo = `
+    ${row('분류', normalizeCategory(vessel.category))}
+    ${mask.voyagePlan ? row('항차계획', vessel.voyagePlan, 'multiline') : ''}
+    ${mask.agSupplyPlan && hasText(vessel.agSupplyPlan) ? row('윤활유 보급계획 등', vessel.agSupplyPlan, 'multiline') : ''}
+  `;
+
+  let consentInfo = '';
+  if (mask.fujairahConsent) {
+    consentInfo += rowHtml('푸자이라항 동의 여부', highlightValue(vessel.fujairahConsent));
+  }
+  if (mask.yanbuConsent) {
+    consentInfo += rowHtml('얀부항 동의 여부', highlightValue(vessel.yanbuConsent));
+  }
+  if (mask.consentLetter) {
+    consentInfo += rowHtml('동의서 확보', highlightValue(vessel.consentLetter));
+  }
+  if (!consentInfo.trim()) {
+    consentInfo = row('해당 없음', '-');
+  }
+
+  const crewStatus = normalizeCrewPlanStatus(vessel.crewPlanStatus);
+  let crewInfo = `
+    ${rowHtml('선원교대 계획', highlightValue(crewStatus))}
+  `;
+
+  if (crewStatus !== '불요') {
+    crewInfo += `
+      ${row('선원교대 인원', hasText(vessel.crewCount) ? `${vessel.crewCount}명` : '')}
+      ${row('선원교대 날짜', vessel.crewDate)}
+      ${row('선원교대 항구', vessel.crewPort)}
+      ${row('선원교대 상세', vessel.crewPlanDetail, 'multiline')}
+    `;
+  }
+
+  let bonusInfo = `
+    ${row('보너스 횟수', hasText(vessel.bonusCount) ? `${vessel.bonusCount}회` : '')}
+    ${row('보너스 총액 ($)', hasText(vessel.bonusAmount) ? formatMoney(vessel.bonusAmount) : '')}
+  `;
+
   return `
-    <div class="map-label ${cls}" data-index="${index}">
-      <div class="title">${escapeHtml(vessel.name)}</div>
-      ${makeOptionalLine('관리사', vessel.managementCompany)}
-      ${makeOptionalLine('선령', ageText)}
-      ${makeOptionalLine('Builder', vessel.builder)}
-      ${makeOptionalLine('Delivery Date', vessel.deliveryDate)}
-      ${makeOptionalLine('Next Dry dock', vessel.nextDryDock)}
-      <div class="line"><span class="label-name">분류:</span> <span class="map-value-normal">${escapeHtml(normalizeCategory(vessel.category))}</span></div>
-      ${mask.fujairahConsent ? `<div class="line"><span class="label-name">푸자이라:</span> ${highlightValue(vessel.fujairahConsent)}</div>` : ''}
-      ${mask.yanbuConsent ? `<div class="line"><span class="label-name">얀부:</span> ${highlightValue(vessel.yanbuConsent)}</div>` : ''}
-      ${mask.consentLetter ? `<div class="line"><span class="label-name">동의서:</span> ${highlightValue(vessel.consentLetter)}</div>` : ''}
-      ${mask.voyagePlan ? makeOptionalLine('항차계획', vessel.voyagePlan) : ''}
-      ${mask.agSupplyPlan ? makeOptionalLine('윤활유 보급계획 등', vessel.agSupplyPlan) : ''}
-      ${makeCrewPlanBlock(vessel, mask)}
-      ${makeBonusBlock(vessel)}
-      <div class="map-label-actions">
-        <button type="button" class="map-mini-btn edit" onclick="editVessel(${index})">수정</button>
-        ${makeConsentButtons(index, vessel)}
+    <div class="map-label map-label-redesign ${cls}" data-index="${index}">
+      <div class="detail-panel-header">
+        <div class="detail-panel-title">${escapeHtml(vessel.name)}</div>
+      </div>
+
+      ${divider}
+
+      <div class="detail-section-block">
+        <div class="detail-section-title">기본정보</div>
+        <div class="detail-section-body">
+          ${basicInfo}
+        </div>
+      </div>
+
+      ${divider}
+
+      <div class="detail-section-block">
+        <div class="detail-section-title">운항지침</div>
+        <div class="detail-section-body">
+          ${routeInfo}
+        </div>
+      </div>
+
+      ${divider}
+
+      <div class="detail-section-block">
+        <div class="detail-section-title">동의서</div>
+        <div class="detail-section-body">
+          ${consentInfo}
+        </div>
+      </div>
+
+      ${divider}
+
+      <div class="detail-section-block">
+        <div class="detail-section-title">선원교대</div>
+        <div class="detail-section-body">
+          ${crewInfo}
+        </div>
+      </div>
+
+      ${divider}
+
+      <div class="detail-section-block">
+        <div class="detail-section-title">보너스</div>
+        <div class="detail-section-body">
+          ${bonusInfo}
+        </div>
+      </div>
+
+      <div class="detail-panel-footer">
+        <button type="button" class="map-mini-btn close" onclick="closeLabel(${index})">닫기</button>
+        <button type="button" class="map-mini-btn view" onclick="viewConsentFile(${index})" ${vessel.consentFile ? '' : 'disabled'}>동의서</button>
+        <button type="button" class="map-mini-btn upload" onclick="openConsentUpload(${index})">업로드</button>
       </div>
     </div>
   `;
 }
+
 
 function updateToolbarButtons() {
   const buttonMap = {
@@ -516,6 +644,7 @@ function updateToolbarButtons() {
     bothArea: filterBothAreaBtn,
     other: filterOtherBtn,
     under15: filterUnder15Btn,
+    dryDock6m: filterDryDock6mBtn,
     fujairah: filterFujairahBtn,
     yanbu: filterYanbuBtn,
     crewConfirmed: filterCrewConfirmedBtn,
@@ -568,6 +697,11 @@ function updateStatusBoard() {
 
   if (countUnder15) {
     countUnder15.textContent = `${vessels.filter(v => isUnder15Years(v)).length}척`;
+  }
+
+
+  if (countDryDock6m) {
+    countDryDock6m.textContent = `${vessels.filter(v => isDryDockWithin6MonthsOrOverdue(v)).length}척`;
   }
 
   if (countFujairah) {
@@ -995,10 +1129,12 @@ function renderExternalLabels() {
     }
   } else {
     const currentlyVisible = getCurrentlyVisibleTargetVessels();
-    renderTargets = currentlyVisible.map(vessel => ({
-      vessel,
-      index: vessels.findIndex(v => String(v.name || '').trim().toLowerCase() === String(vessel.name || '').trim().toLowerCase())
-    }));
+    renderTargets = currentlyVisible
+      .map(vessel => ({
+        vessel,
+        index: vessels.findIndex(v => String(v.name || '').trim().toLowerCase() === String(vessel.name || '').trim().toLowerCase())
+      }))
+      .filter(item => !hiddenLabelIndices.has(item.index));
   }
 
   if (!renderTargets.length) return;
@@ -1038,8 +1174,8 @@ function renderExternalLabels() {
   leftItems.sort((a, b) => a.point.y - b.point.y);
   rightItems.sort((a, b) => a.point.y - b.point.y);
 
-  const boxW = 250;
-  const boxH = 330;
+  const boxW = 320;
+  const boxH = 560;
   const gap = 10;
 
   const topY = 70;
@@ -1181,6 +1317,7 @@ function clearFormAndSelection() {
   activeLabelIndex = null;
   labelMode = 'none';
   uploadTargetIndex = null;
+  hiddenLabelIndices.clear();
 
   if (shipSearchInput) {
     shipSearchInput.value = '';
@@ -1207,6 +1344,7 @@ function setFilter(filterName) {
   currentFilter = filterName;
   labelMode = 'none';
   activeLabelIndex = null;
+  hiddenLabelIndices.clear();
   updateToolbarButtons();
   renderList();
   renderMap(true);
@@ -1310,6 +1448,7 @@ if (toggleAllLabelsBtn) {
     } else {
       labelMode = 'all';
       activeLabelIndex = null;
+      hiddenLabelIndices.clear();
       resetForm();
     }
 
@@ -1337,6 +1476,12 @@ if (filterOtherBtn) {
 if (filterUnder15Btn) {
   filterUnder15Btn.addEventListener('click', () => setFilter('under15'));
 }
+
+if (filterDryDock6mBtn) {
+  filterDryDock6mBtn.addEventListener('click', () => setFilter('dryDock6m'));
+}
+
+
 
 if (filterFujairahBtn) {
   filterFujairahBtn.addEventListener('click', () => setFilter('fujairah'));
@@ -1547,6 +1692,18 @@ window.viewConsentFile = function (index) {
 
   window.open(url, '_blank');
 };
+
+window.closeLabel = function (index) {
+  if (labelMode === 'one') {
+    clearFormAndSelection();
+    return;
+  }
+
+  hiddenLabelIndices.add(index);
+  renderExternalLabels();
+  setTimeout(updateLeaderLines, 30);
+};
+
 
 map.on('zoomend moveend resize', () => {
   renderExternalLabels();

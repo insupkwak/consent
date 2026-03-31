@@ -6,6 +6,8 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook
 import platform
+from dateutil.relativedelta import relativedelta
+from datetime import date
 
 app = Flask(__name__)
 
@@ -265,6 +267,42 @@ def normalize_report_value(value, default="-"):
     return text if text else default
 
 
+def parse_date_safe(text):
+    text = str(text or "").strip()
+    if not text:
+        return None
+
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except Exception:
+            continue
+    return None
+
+
+def is_under_15(v):
+    dt = parse_date_safe(v.get("deliveryDate"))
+    if not dt:
+        return False
+
+    today = date.today()
+    years = (today - dt).days / 365.2425
+    return years < 15
+
+
+def is_drydock_6m(v):
+    dt = parse_date_safe(v.get("nextDryDock"))
+    if not dt:
+        return False
+
+    today = date.today()
+    six_months = today + relativedelta(months=6)
+
+    return dt <= six_months   # 🔥 과거 포함
+
+
+
+
 def filter_vessels_for_report(vessels, filter_name):
     filter_name = (filter_name or "all").strip()
 
@@ -276,6 +314,14 @@ def filter_vessels_for_report(vessels, filter_name):
 
     if filter_name == "other":
         return [v for v in vessels if (v.get("category") or "AG 내") == "그외 지역"]
+
+    # 🔥 추가 1
+    if filter_name == "under15":
+        return [v for v in vessels if is_under_15(v)]
+
+    # 🔥 추가 2
+    if filter_name == "dryDock6m":
+        return [v for v in vessels if is_drydock_6m(v)]
 
     if filter_name == "fujairah":
         return [v for v in vessels if (v.get("fujairahConsent") or "").strip() == "동의"]
@@ -1040,4 +1086,4 @@ def uploaded_consent_file(filename):
 init_db()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
