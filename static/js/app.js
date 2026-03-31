@@ -198,10 +198,6 @@ function handleConsentByCategory() {
 
   if (category === '그외 지역') {
     consent.value = '불요';
-  } else {
-    if (consent.value === '불요') {
-      consent.value = '';
-    }
   }
 }
 
