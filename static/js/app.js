@@ -24,6 +24,7 @@ const filterAllBtn = document.getElementById('filterAllBtn');
 const filterAgBtn = document.getElementById('filterAgBtn');
 const filterBothAreaBtn = document.getElementById('filterBothAreaBtn');
 const filterOtherBtn = document.getElementById('filterOtherBtn');
+const filterUnder15Btn = document.getElementById('filterUnder15Btn');
 const filterFujairahBtn = document.getElementById('filterFujairahBtn');
 const filterYanbuBtn = document.getElementById('filterYanbuBtn');
 const filterCrewConfirmedBtn = document.getElementById('filterCrewConfirmedBtn');
@@ -36,6 +37,7 @@ const countAll = document.getElementById('countAll');
 const countAg = document.getElementById('countAg');
 const countBothArea = document.getElementById('countBothArea');
 const countOther = document.getElementById('countOther');
+const countUnder15 = document.getElementById('countUnder15');
 const countFujairah = document.getElementById('countFujairah');
 const countYanbu = document.getElementById('countYanbu');
 const countCrewConfirmed = document.getElementById('countCrewConfirmed');
@@ -184,7 +186,6 @@ function getCategoryDisplayMask(category) {
   };
 }
 
-
 function handleConsentByCategory() {
   const category = document.getElementById('category')?.value || '';
   const consent = document.getElementById('consentLetter');
@@ -232,12 +233,12 @@ function applyCategoryVisibility(categoryValue) {
 const categorySelect = document.getElementById('category');
 
 if (categorySelect) {
-    categorySelect.addEventListener('change', () => {
-      applyCategoryVisibility(categorySelect.value);
-      handleConsentByCategory();   // ✅ 여기 추가
-      renderExternalLabels();
-      renderList();
-    });
+  categorySelect.addEventListener('change', () => {
+    applyCategoryVisibility(categorySelect.value);
+    handleConsentByCategory();
+    renderExternalLabels();
+    renderList();
+  });
 }
 
 const crewPlanStatusSelect = document.getElementById('crewPlanStatus');
@@ -256,6 +257,53 @@ function hasText(value) {
 function makeOptionalLine(label, value, className = 'map-value-normal') {
   if (!hasText(value)) return '';
   return `<div class="line"><span class="label-name">${label}:</span> <span class="${className}">${escapeHtml(value)}</span></div>`;
+}
+
+function parseDateOnly(dateString) {
+  const text = String(dateString || '').trim();
+  if (!text) return null;
+
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+
+  const dt = new Date(y, m - 1, d);
+  if (
+    dt.getFullYear() !== y ||
+    dt.getMonth() !== m - 1 ||
+    dt.getDate() !== d
+  ) {
+    return null;
+  }
+
+  return dt;
+}
+
+function getVesselAgeYears(deliveryDate) {
+  const dt = parseDateOnly(deliveryDate);
+  if (!dt) return null;
+
+  const now = new Date();
+  const diffMs = now.getTime() - dt.getTime();
+  if (diffMs < 0) return 0;
+
+  const years = diffMs / (1000 * 60 * 60 * 24 * 365.2425);
+  return years;
+}
+
+function formatVesselAge(deliveryDate) {
+  const years = getVesselAgeYears(deliveryDate);
+  if (years === null) return '';
+  return `${years.toFixed(1)}년`;
+}
+
+function isUnder15Years(vessel) {
+  const years = getVesselAgeYears(vessel.deliveryDate);
+  if (years === null) return false;
+  return years < 15;
 }
 
 function getVesselColor(vessel) {
@@ -355,6 +403,10 @@ function getFilteredVessels() {
     return vessels.filter(v => normalizeCategory(v.category) === '그외 지역');
   }
 
+  if (currentFilter === 'under15') {
+    return vessels.filter(v => isUnder15Years(v));
+  }
+
   if (currentFilter === 'fujairah') {
     return vessels.filter(v => normalizeConsent(v.fujairahConsent) === '동의');
   }
@@ -431,11 +483,16 @@ function makeCrewPlanBlock(vessel, mask) {
 function makeLabelHtml(vessel, index) {
   const cls = getVesselColor(vessel);
   const mask = getCategoryDisplayMask(vessel.category);
+  const ageText = formatVesselAge(vessel.deliveryDate);
 
   return `
     <div class="map-label ${cls}" data-index="${index}">
       <div class="title">${escapeHtml(vessel.name)}</div>
       ${makeOptionalLine('관리사', vessel.managementCompany)}
+      ${makeOptionalLine('선령', ageText)}
+      ${makeOptionalLine('Builder', vessel.builder)}
+      ${makeOptionalLine('Delivery Date', vessel.deliveryDate)}
+      ${makeOptionalLine('Next Dry dock', vessel.nextDryDock)}
       <div class="line"><span class="label-name">분류:</span> <span class="map-value-normal">${escapeHtml(normalizeCategory(vessel.category))}</span></div>
       ${mask.fujairahConsent ? `<div class="line"><span class="label-name">푸자이라:</span> ${highlightValue(vessel.fujairahConsent)}</div>` : ''}
       ${mask.yanbuConsent ? `<div class="line"><span class="label-name">얀부:</span> ${highlightValue(vessel.yanbuConsent)}</div>` : ''}
@@ -458,6 +515,7 @@ function updateToolbarButtons() {
     ag: filterAgBtn,
     bothArea: filterBothAreaBtn,
     other: filterOtherBtn,
+    under15: filterUnder15Btn,
     fujairah: filterFujairahBtn,
     yanbu: filterYanbuBtn,
     crewConfirmed: filterCrewConfirmedBtn,
@@ -506,6 +564,10 @@ function updateStatusBoard() {
 
   if (countOther) {
     countOther.textContent = `${vessels.filter(v => normalizeCategory(v.category) === '그외 지역').length}척`;
+  }
+
+  if (countUnder15) {
+    countUnder15.textContent = `${vessels.filter(v => isUnder15Years(v)).length}척`;
   }
 
   if (countFujairah) {
@@ -571,7 +633,10 @@ async function loadData(options = {}) {
       crewPlanStatus: normalizeCrewPlanStatus(v.crewPlanStatus),
       crewDate: v.crewDate || '',
       voyagePlan: v.voyagePlan || '',
-      agSupplyPlan: v.agSupplyPlan || ''
+      agSupplyPlan: v.agSupplyPlan || '',
+      builder: v.builder || '',
+      deliveryDate: v.deliveryDate || '',
+      nextDryDock: v.nextDryDock || ''
     }));
 
     if (previousEditName) {
@@ -974,7 +1039,7 @@ function renderExternalLabels() {
   rightItems.sort((a, b) => a.point.y - b.point.y);
 
   const boxW = 250;
-  const boxH = 250;
+  const boxH = 330;
   const gap = 10;
 
   const topY = 70;
@@ -1042,6 +1107,7 @@ function renderList() {
     const colorType = getVesselColor(vessel);
     const status = colorType === 'red' ? '빨간색' : colorType === 'yellow' ? '노란색' : colorType === 'orange' ? '주황색' : '녹색';
     const hasConsentFile = !!vessel.consentFile;
+    const ageText = formatVesselAge(vessel.deliveryDate);
 
     const item = document.createElement('div');
     item.className = 'vessel-item';
@@ -1050,6 +1116,10 @@ function renderList() {
     item.innerHTML = `
       <strong>${escapeHtml(vessel.name)}</strong>
       ${hasText(vessel.managementCompany) ? `<small>관리사: ${escapeHtml(vessel.managementCompany)}</small>` : ''}
+      ${hasText(vessel.builder) ? `<small>Builder: ${escapeHtml(vessel.builder)}</small>` : ''}
+      ${hasText(vessel.deliveryDate) ? `<small>Delivery Date: ${escapeHtml(vessel.deliveryDate)}</small>` : ''}
+      ${hasText(ageText) ? `<small>선령: ${escapeHtml(ageText)}</small>` : ''}
+      ${hasText(vessel.nextDryDock) ? `<small>Next Dry dock: ${escapeHtml(vessel.nextDryDock)}</small>` : ''}
       <small>분류: ${escapeHtml(normalizeCategory(vessel.category))}</small>
       ${mask.fujairahConsent ? `<small>푸자이라항: ${highlightListValue(vessel.fujairahConsent)}</small>` : ''}
       ${mask.yanbuConsent ? `<small>얀부항: ${highlightListValue(vessel.yanbuConsent)}</small>` : ''}
@@ -1086,6 +1156,9 @@ function resetForm() {
 
   document.getElementById('vesselName').value = '';
   document.getElementById('managementCompany').value = '';
+  document.getElementById('builder').value = '';
+  document.getElementById('deliveryDate').value = '';
+  document.getElementById('nextDryDock').value = '';
   document.getElementById('voyagePlan').value = '';
   document.getElementById('agSupplyPlan').value = '';
   document.getElementById('crewCount').value = '';
@@ -1145,6 +1218,9 @@ function fillFormByVessel(index) {
 
   document.getElementById('vesselName').value = vessel.name || '';
   document.getElementById('managementCompany').value = vessel.managementCompany || '';
+  document.getElementById('builder').value = vessel.builder || '';
+  document.getElementById('deliveryDate').value = vessel.deliveryDate || '';
+  document.getElementById('nextDryDock').value = vessel.nextDryDock || '';
   document.getElementById('category').value = normalizeCategory(vessel.category);
   document.getElementById('fujairahConsent').value = vessel.fujairahConsent || '동의';
   document.getElementById('yanbuConsent').value = vessel.yanbuConsent || '동의';
@@ -1162,7 +1238,7 @@ function fillFormByVessel(index) {
   document.getElementById('longitude').value = vessel.longitude ?? '';
 
   applyCategoryVisibility(vessel.category);
-  handleConsentByCategory();   // ✅ 추가
+  handleConsentByCategory();
   editIndex = index;
   editingOriginalName = String(vessel.name || '').trim();
 }
@@ -1258,6 +1334,10 @@ if (filterOtherBtn) {
   filterOtherBtn.addEventListener('click', () => setFilter('other'));
 }
 
+if (filterUnder15Btn) {
+  filterUnder15Btn.addEventListener('click', () => setFilter('under15'));
+}
+
 if (filterFujairahBtn) {
   filterFujairahBtn.addEventListener('click', () => setFilter('fujairah'));
 }
@@ -1348,6 +1428,9 @@ form.addEventListener('submit', async function (e) {
   const vessel = {
     name: currentName,
     managementCompany: document.getElementById('managementCompany').value.trim(),
+    builder: document.getElementById('builder').value.trim(),
+    deliveryDate: document.getElementById('deliveryDate').value.trim(),
+    nextDryDock: document.getElementById('nextDryDock').value.trim(),
     category: document.getElementById('category').value,
     fujairahConsent: document.getElementById('fujairahConsent').value,
     yanbuConsent: document.getElementById('yanbuConsent').value,
@@ -1495,5 +1578,5 @@ if (document.getElementById('category')) {
   applyCategoryVisibility(document.getElementById('category').value);
 }
 
-handleConsentByCategory();   // ✅ 추가
+handleConsentByCategory();
 loadData({ preserveSelection: true, fitBounds: true });

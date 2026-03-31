@@ -34,9 +34,8 @@ DB_PATH = os.path.join(DATA_DIR, "vessels.db")
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
-
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp"}
+
 
 # =========================
 # DB 기본
@@ -62,11 +61,15 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
             management_company TEXT DEFAULT '',
+            builder TEXT DEFAULT '',
+            delivery_date TEXT DEFAULT '',
+            next_dry_dock TEXT DEFAULT '',
             category TEXT DEFAULT 'AG 내',
             fujairah_consent TEXT DEFAULT '동의',
             yanbu_consent TEXT DEFAULT '동의',
             consent_letter TEXT DEFAULT '확보',
             voyage_plan TEXT DEFAULT '',
+            ag_supply_plan TEXT DEFAULT '',
             crew_plan_status TEXT DEFAULT '불요',
             crew_count TEXT DEFAULT '',
             crew_date TEXT DEFAULT '',
@@ -85,6 +88,15 @@ def init_db():
     if "management_company" not in columns:
         db.execute("ALTER TABLE vessels ADD COLUMN management_company TEXT DEFAULT ''")
 
+    if "builder" not in columns:
+        db.execute("ALTER TABLE vessels ADD COLUMN builder TEXT DEFAULT ''")
+
+    if "delivery_date" not in columns:
+        db.execute("ALTER TABLE vessels ADD COLUMN delivery_date TEXT DEFAULT ''")
+
+    if "next_dry_dock" not in columns:
+        db.execute("ALTER TABLE vessels ADD COLUMN next_dry_dock TEXT DEFAULT ''")
+
     if "category" not in columns:
         db.execute("ALTER TABLE vessels ADD COLUMN category TEXT DEFAULT 'AG 내'")
 
@@ -93,6 +105,7 @@ def init_db():
 
     db.commit()
     db.close()
+
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -105,6 +118,9 @@ def row_to_vessel_dict(row):
     return {
         "name": row["name"] or "",
         "managementCompany": row["management_company"] or "",
+        "builder": row["builder"] or "",
+        "deliveryDate": row["delivery_date"] or "",
+        "nextDryDock": row["next_dry_dock"] or "",
         "category": row["category"] or "AG 내",
         "fujairahConsent": row["fujairah_consent"] or "",
         "yanbuConsent": row["yanbu_consent"] or "",
@@ -122,6 +138,7 @@ def row_to_vessel_dict(row):
         "longitude": row["longitude"],
         "consentFile": row["consent_file"] or "",
     }
+
 
 def load_vessels():
     db = get_db()
@@ -144,6 +161,9 @@ def normalize_vessel_data(data, old_vessel=None):
     return {
         "name": str(data.get("name", "")).strip(),
         "managementCompany": str(data.get("managementCompany", old_vessel.get("managementCompany", ""))).strip(),
+        "builder": str(data.get("builder", old_vessel.get("builder", ""))).strip(),
+        "deliveryDate": str(data.get("deliveryDate", old_vessel.get("deliveryDate", ""))).strip(),
+        "nextDryDock": str(data.get("nextDryDock", old_vessel.get("nextDryDock", ""))).strip(),
         "category": str(data.get("category", old_vessel.get("category", "AG 내"))).strip() or "AG 내",
         "fujairahConsent": str(data.get("fujairahConsent", old_vessel.get("fujairahConsent", "동의"))).strip(),
         "yanbuConsent": str(data.get("yanbuConsent", old_vessel.get("yanbuConsent", "동의"))).strip(),
@@ -162,17 +182,22 @@ def normalize_vessel_data(data, old_vessel=None):
         "consentFile": old_vessel.get("consentFile", "")
     }
 
+
 def upsert_vessel(vessel):
     db = get_db()
     db.execute("""
         INSERT INTO vessels (
-            name, management_company, category, fujairah_consent, yanbu_consent, consent_letter,
+            name, management_company, builder, delivery_date, next_dry_dock,
+            category, fujairah_consent, yanbu_consent, consent_letter,
             voyage_plan, ag_supply_plan, crew_plan_status, crew_count, crew_date,
             crew_port, crew_plan_detail, bonus_count, bonus_amount,
             latitude, longitude, consent_file
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
             management_company = excluded.management_company,
+            builder = excluded.builder,
+            delivery_date = excluded.delivery_date,
+            next_dry_dock = excluded.next_dry_dock,
             category = excluded.category,
             fujairah_consent = excluded.fujairah_consent,
             yanbu_consent = excluded.yanbu_consent,
@@ -192,6 +217,9 @@ def upsert_vessel(vessel):
     """, (
         vessel["name"],
         vessel["managementCompany"],
+        vessel["builder"],
+        vessel["deliveryDate"],
+        vessel["nextDryDock"],
         vessel["category"],
         vessel["fujairahConsent"],
         vessel["yanbuConsent"],
@@ -210,6 +238,7 @@ def upsert_vessel(vessel):
         vessel["consentFile"],
     ))
     db.commit()
+
 
 # =========================
 # 기타 유틸
@@ -262,12 +291,16 @@ def filter_vessels_for_report(vessels, filter_name):
 
     return vessels
 
+
 def build_report_rows(vessels):
     rows = []
     for vessel in vessels:
         rows.append({
             "name": normalize_report_value(vessel.get("name")),
             "managementCompany": normalize_report_value(vessel.get("managementCompany")),
+            "builder": normalize_report_value(vessel.get("builder")),
+            "deliveryDate": normalize_report_value(vessel.get("deliveryDate")),
+            "nextDryDock": normalize_report_value(vessel.get("nextDryDock")),
             "category": normalize_report_value(vessel.get("category"), "AG 내"),
             "fujairahConsent": normalize_report_value(vessel.get("fujairahConsent")),
             "yanbuConsent": normalize_report_value(vessel.get("yanbuConsent")),
@@ -750,6 +783,7 @@ def add_no_cache_headers(response):
 def index():
     return render_template("index.html", version=get_asset_version())
 
+
 @app.route("/report")
 def report():
     vessels = load_vessels()
@@ -794,11 +828,9 @@ def report():
 # =========================
 @app.route("/api/vessels", methods=["GET"])
 def get_vessels_api():
- 
     db = get_db()
     count = db.execute("SELECT COUNT(*) FROM vessels").fetchone()[0]
     vessels = load_vessels()
-
     return jsonify(vessels)
 
 
@@ -922,6 +954,7 @@ def upload_consent():
     except Exception as e:
         return jsonify({"success": False, "message": f"업로드 중 오류: {str(e)}"}), 500
 
+
 @app.route("/api/upload-positions", methods=["POST"])
 def upload_positions():
     try:
@@ -949,7 +982,6 @@ def upload_positions():
         failed_name_set = set()
 
         for normalized_name, item in latest_by_name.items():
-            # DB에 없는 선박은 완전히 무시
             if normalized_name not in db_name_set:
                 continue
 
@@ -957,7 +989,6 @@ def upload_positions():
             lat = item["latitude"]
             lon = item["longitude"]
 
-            # DB에는 있지만 좌표가 비정상이면 실패 처리
             if lat is None or lon is None or abs(lat) > 90 or abs(lon) > 180:
                 failed_name_set.add(real_name)
                 continue
@@ -1009,4 +1040,4 @@ def uploaded_consent_file(filename):
 init_db()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)
